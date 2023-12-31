@@ -82,7 +82,9 @@ def launch_app() -> None:
             return EventSourceResponse(generator, media_type="text/event-stream")
 
         response = await chat_model.chat(**input_kwargs)
-        choice = ChatCompletionResponseChoice(index=0, message=ChatMessage(role=Role.ASSISTANT, content=response))
+        choice = ChatCompletionResponseChoice(
+            index=0, message=ChatMessage(role=Role.ASSISTANT, content=response), finish_reason=Finish.STOP
+        )
         return ChatCompletionResponse(
             id=input_kwargs["request_id"],
             model=request.model,
