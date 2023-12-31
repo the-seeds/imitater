@@ -46,7 +46,7 @@ class ChatModel:
         if not self._generation_config.max_new_tokens:
             self._generation_config.max_new_tokens = 1024
 
-        if isinstance(self._generation_config.eos_token_id, str):
+        if isinstance(self._generation_config.eos_token_id, int):
             self._generation_config.eos_token_id = [self._generation_config.eos_token_id]
 
     async def _generate(
