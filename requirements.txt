@@ -1,0 +1,4 @@
+transformers
+sse-starlette
+vllm
+pydantic>=2.0.0
