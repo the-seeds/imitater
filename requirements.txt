@@ -1,4 +1,3 @@
-transformers
 sse-starlette
-vllm
-pydantic>=2.0.0
+transformers
+vllm==0.2.6

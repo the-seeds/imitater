@@ -1,4 +1,3 @@
-import json
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict
@@ -10,7 +9,7 @@ from sse_starlette import EventSourceResponse
 
 from ..model.chat_model import ChatModel
 from ..model.embed_model import EmbedModel
-from ..utils.generic import torch_gc
+from ..utils.generic import dictify, jsonify, torch_gc
 from .protocol import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -70,7 +69,7 @@ def launch_app() -> None:
     @app.post("/v1/chat/completions", response_model=ChatCompletionResponse, status_code=status.HTTP_200_OK)
     async def create_chat_completion(request: ChatCompletionRequest):
         input_kwargs = {
-            "messages": [message.model_dump() for message in request.messages],
+            "messages": [dictify(message) for message in request.messages],
             "request_id": "chatcmpl-{}".format(uuid.uuid4().hex),
             "temperature": request.temperature,
             "top_p": request.top_p,
@@ -97,18 +96,18 @@ def launch_app() -> None:
             index=0, delta=DeltaMessage(role=Role.ASSISTANT, content=""), finish_reason=None
         )
         chunk = ChatCompletionStreamResponse(id=input_kwargs["request_id"], model=request.model, choices=[choice])
-        yield json.dumps(chunk.model_dump(exclude_unset=True), ensure_ascii=False)
+        yield jsonify(chunk)
 
         async for new_token in chat_model.stream_chat(**input_kwargs):
             choice = ChatCompletionStreamResponseChoice(
                 index=0, delta=DeltaMessage(content=new_token), finish_reason=None
             )
             chunk = ChatCompletionStreamResponse(id=input_kwargs["request_id"], model=request.model, choices=[choice])
-            yield json.dumps(chunk.model_dump(exclude_unset=True), ensure_ascii=False)
+            yield jsonify(chunk)
 
         choice = ChatCompletionStreamResponseChoice(index=0, delta=DeltaMessage(), finish_reason=Finish.STOP)
         chunk = ChatCompletionStreamResponse(id=input_kwargs["request_id"], model=request.model, choices=[choice])
-        yield json.dumps(chunk.model_dump(exclude_unset=True), ensure_ascii=False)
+        yield jsonify(chunk)
         yield "[DONE]"
 
     uvicorn.run(app, host="0.0.0.0", port=8000, workers=1)
