@@ -1,14 +1,15 @@
 import os
-import torch
 from typing import TYPE_CHECKING, List
+
+import torch
 from transformers import AutoModel, AutoTokenizer
+
 
 if TYPE_CHECKING:
     from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 
 class EmbedModel:
-
     def __init__(self) -> None:
         self._batch_size = int(os.environ.get("EMBED_BATCH_SIZE"))
         self._model: "PreTrainedModel" = AutoModel.from_pretrained(
@@ -25,10 +26,7 @@ class EmbedModel:
         results = []
         for i in range(0, len(texts), self._batch_size):
             batch_encoding = self._tokenizer(
-                texts[i : i + self._batch_size],
-                padding=True,
-                truncation=True,
-                return_tensors="pt"
+                texts[i : i + self._batch_size], padding=True, truncation=True, return_tensors="pt"
             ).to(self._model.device)
 
             model_output = self._model(**batch_encoding)

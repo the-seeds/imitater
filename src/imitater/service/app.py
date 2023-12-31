@@ -1,31 +1,33 @@
 import json
 import uuid
-import uvicorn
 from contextlib import asynccontextmanager
+from typing import Any, Dict
+
+import uvicorn
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette import EventSourceResponse
-from typing import Any, Dict
 
-from imitater.model import ChatModel, EmbedModel
-from imitater.service.protocol import (
-    Role,
-    Finish,
-    ModelCard,
-    ModelList,
-    ChatMessage,
-    DeltaMessage,
-    UsageInfo,
+from ..model.chat_model import ChatModel
+from ..model.embed_model import EmbedModel
+from ..utils.generic import torch_gc
+from .protocol import (
     ChatCompletionRequest,
     ChatCompletionResponse,
     ChatCompletionResponseChoice,
     ChatCompletionStreamResponse,
     ChatCompletionStreamResponseChoice,
+    ChatMessage,
+    DeltaMessage,
     Embeddings,
     EmbeddingsRequest,
-    EmbeddingsResponse
+    EmbeddingsResponse,
+    Finish,
+    ModelCard,
+    ModelList,
+    Role,
+    UsageInfo,
 )
-from imitater.utils.generic import torch_gc
 
 
 @asynccontextmanager
@@ -40,11 +42,7 @@ def launch_app() -> None:
     embed_model = EmbedModel()
 
     app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"]
+        CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"]
     )
 
     @app.get("/v1/models", response_model=ModelList)
@@ -57,7 +55,7 @@ def launch_app() -> None:
         texts = request.input
         if isinstance(texts, str):
             texts = [texts]
-        
+
         embed_output = await embed_model(texts)
         embeddings = []
         for i in range(len(embed_output)):
@@ -66,11 +64,7 @@ def launch_app() -> None:
         return EmbeddingsResponse(
             data=embeddings,
             model=request.model,
-            usage=UsageInfo(
-                prompt_tokens=0,
-                completion_tokens=None,
-                total_tokens=0
-            )
+            usage=UsageInfo(prompt_tokens=0, completion_tokens=None, total_tokens=0),
         )
 
     @app.post("/v1/chat/completions", response_model=ChatCompletionResponse, status_code=status.HTTP_200_OK)
@@ -80,7 +74,7 @@ def launch_app() -> None:
             "request_id": "chatcmpl-{}".format(uuid.uuid4().hex),
             "temperature": request.temperature,
             "top_p": request.top_p,
-            "max_tokens": request.max_tokens
+            "max_tokens": request.max_tokens,
         }
 
         if request.stream:
@@ -88,57 +82,30 @@ def launch_app() -> None:
             return EventSourceResponse(generator, media_type="text/event-stream")
 
         response = await chat_model.chat(**input_kwargs)
-        choice = ChatCompletionResponseChoice(
-            index=0,
-            message=ChatMessage(role=Role.ASSISTANT, content=response)
-        )
+        choice = ChatCompletionResponseChoice(index=0, message=ChatMessage(role=Role.ASSISTANT, content=response))
         return ChatCompletionResponse(
             id=input_kwargs["request_id"],
             model=request.model,
             choices=[choice],
-            usage=UsageInfo(
-                prompt_tokens=0,
-                completion_tokens=0,
-                total_tokens=0
-            )
+            usage=UsageInfo(prompt_tokens=0, completion_tokens=0, total_tokens=0),
         )
 
     async def create_stream_chat_completion(request: ChatCompletionRequest, input_kwargs: Dict[str, Any]):
         choice = ChatCompletionStreamResponseChoice(
-            index=0,
-            delta=DeltaMessage(role=Role.ASSISTANT, content=""),
-            finish_reason=None
+            index=0, delta=DeltaMessage(role=Role.ASSISTANT, content=""), finish_reason=None
         )
-        chunk = ChatCompletionStreamResponse(
-            id=input_kwargs["request_id"],
-            model=request.model,
-            choices=[choice]
-        )
+        chunk = ChatCompletionStreamResponse(id=input_kwargs["request_id"], model=request.model, choices=[choice])
         yield json.dumps(chunk.model_dump(exclude_unset=True), ensure_ascii=False)
 
         async for new_token in chat_model.stream_chat(**input_kwargs):
             choice = ChatCompletionStreamResponseChoice(
-                index=0,
-                delta=DeltaMessage(content=new_token),
-                finish_reason=None
+                index=0, delta=DeltaMessage(content=new_token), finish_reason=None
             )
-            chunk = ChatCompletionStreamResponse(
-                id=input_kwargs["request_id"],
-                model=request.model,
-                choices=[choice]
-            )
+            chunk = ChatCompletionStreamResponse(id=input_kwargs["request_id"], model=request.model, choices=[choice])
             yield json.dumps(chunk.model_dump(exclude_unset=True), ensure_ascii=False)
 
-        choice = ChatCompletionStreamResponseChoice(
-            index=0,
-            delta=DeltaMessage(),
-            finish_reason=Finish.STOP
-        )
-        chunk = ChatCompletionStreamResponse(
-            id=input_kwargs["request_id"],
-            model=request.model,
-            choices=[choice]
-        )
+        choice = ChatCompletionStreamResponseChoice(index=0, delta=DeltaMessage(), finish_reason=Finish.STOP)
+        chunk = ChatCompletionStreamResponse(id=input_kwargs["request_id"], model=request.model, choices=[choice])
         yield json.dumps(chunk.model_dump(exclude_unset=True), ensure_ascii=False)
         yield "[DONE]"
 

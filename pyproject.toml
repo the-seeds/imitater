@@ -9,11 +9,11 @@ line-length = 119
 
 [tool.ruff.isort]
 lines-after-imports = 2
-known-first-party = ["peft"]
+known-first-party = ["imitater"]
 
 [isort]
 default_section = "FIRSTPARTY"
-known_first_party = "peft"
+known_first_party = "imitater"
 known_third_party = [
     "vllm"
 ]
