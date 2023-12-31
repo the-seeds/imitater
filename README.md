@@ -1,5 +1,10 @@
 # Imitater
 
+[![GitHub Code License](https://img.shields.io/github/license/the-seeds/imitater)](LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/imitater)](https://pypi.org/project/imitater/)
+
+## Usage
+
 Create a `.env` file in the root directory:
 
 ```
@@ -19,6 +24,9 @@ ENABLE_ATTN_BIAS=0
 OPENAI_BASE_URL=http://192.168.0.1:8000/v1
 OPENAI_API_KEY=0
 ```
+
+> [!NOTE]
+> [Chat template](https://huggingface.co/docs/transformers/chat_templating) is required for the chat models.
 
 ## Launch Server
 

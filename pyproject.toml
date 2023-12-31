@@ -1,6 +1,10 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
 [tool.black]
 line-length = 119
-target-version = ['py36']
+target-version = ["py310"]
 
 [tool.ruff]
 ignore = ["C901", "E501", "E741", "W605"]
