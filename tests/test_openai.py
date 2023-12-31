@@ -23,7 +23,9 @@ class Action(str, enum.Enum):
 def test_chat(query: str):
     client = OpenAI()
     stream = client.chat.completions.create(
-        messages=[{"role": "user", "content": query}], model="gpt-3.5-turbo", stream=True
+        messages=[{"role": "system", "content": "You are a helpful assistant."}, {"role": "user", "content": query}],
+        model="gpt-3.5-turbo",
+        stream=True,
     )
     print("Assistant: ", end="")
     for chunk in filter(lambda p: p.choices[0].delta.content is not None, stream):
