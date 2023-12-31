@@ -23,7 +23,7 @@ class ChatModel:
             pretrained_model_name_or_path=os.environ.get("CHAT_MODEL")
         )
 
-    def _generate(
+    async def _generate(
         self, messages: List[Dict[str, str]], request_id: str, **gen_kwargs
     ) -> AsyncIterator["RequestOutput"]:
         input_ids = self._tokenizer.apply_chat_template(
@@ -40,7 +40,7 @@ class ChatModel:
         return result_generator
 
     async def chat(self, messages: List[Dict[str, str]], request_id: str, **gen_kwargs) -> str:
-        generator = self._generate(messages, request_id, **gen_kwargs)
+        generator = await self._generate(messages, request_id, **gen_kwargs)
         prev_text = ""
         async for result in generator:
             prev_text = result.outputs[0].text
@@ -49,7 +49,7 @@ class ChatModel:
     async def stream_chat(
         self, messages: List[Dict[str, str]], request_id: str, **gen_kwargs
     ) -> Generator[str, None, None]:
-        generator = self._generate(messages, request_id, **gen_kwargs)
+        generator = await self._generate(messages, request_id, **gen_kwargs)
         prev_text = ""
         async for result in generator:
             delta_text = result.outputs[0].text[len(prev_text) :]
