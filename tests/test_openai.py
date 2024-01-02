@@ -1,4 +1,4 @@
-import enum
+from enum import unique, Enum
 
 import click
 from dotenv import load_dotenv
@@ -14,8 +14,8 @@ except ImportError:
     print("Install `readline` for a better experience.")
 
 
-@enum.unique
-class Action(str, enum.Enum):
+@unique
+class Action(str, Enum):
     CHAT = "chat"
     EMBED = "embed"
 
