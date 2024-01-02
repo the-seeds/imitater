@@ -23,7 +23,7 @@ class Action(str, enum.Enum):
 def test_chat(query: str):
     client = OpenAI()
     stream = client.chat.completions.create(
-        messages=[{"role": "system", "content": "You are a helpful assistant."}, {"role": "user", "content": query}],
+        messages=[{"role": "user", "content": query}],
         model="gpt-3.5-turbo",
         stream=True,
     )
