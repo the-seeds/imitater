@@ -23,11 +23,12 @@ class EmbedModel:
         self._semaphore = asyncio.Semaphore(max_tasks)
         self._batch_size = int(os.environ.get("EMBED_BATCH_SIZE"))
         self._model: "PreTrainedModel" = AutoModel.from_pretrained(
-            pretrained_model_name_or_path=os.environ.get("EMBED_MODEL")
-        ).cuda()
+            pretrained_model_name_or_path=os.environ.get("EMBED_MODEL_PATH"),
+            device_map={"": int(os.environ.get("EMBED_MODEL_DEVICE"))},
+        )
         self._model.eval()
         self._tokenizer: "PreTrainedTokenizerBase" = AutoTokenizer.from_pretrained(
-            pretrained_model_name_or_path=os.environ.get("EMBED_MODEL")
+            pretrained_model_name_or_path=os.environ.get("EMBED_MODEL_PATH")
         )
         self._tokenizer.padding_side = "right"
 

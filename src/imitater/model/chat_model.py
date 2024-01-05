@@ -17,18 +17,22 @@ class ChatModel:
         if int(os.environ.get("ENABLE_ATTN_BIAS")):
             llama_attn_bias_monkey_patch()
 
-        engine_args = AsyncEngineArgs(model=os.environ.get("CHAT_MODEL"))
+        engine_args = AsyncEngineArgs(model=os.environ.get("CHAT_MODEL_PATH"))
+
+        if os.environ.get("CHAT_MODEL_DEVICE"):
+            engine_args.tensor_parallel_size = len(os.environ.get("CHAT_MODEL_DEVICE").split(","))
+
         self._engine = AsyncLLMEngine.from_engine_args(engine_args)
 
         self._tokenizer: "PreTrainedTokenizerBase" = AutoTokenizer.from_pretrained(
-            pretrained_model_name_or_path=os.environ.get("CHAT_MODEL")
+            pretrained_model_name_or_path=os.environ.get("CHAT_MODEL_PATH")
         )
         self._load_generation_config()
 
     def _load_generation_config(self):
         try:
             self._generation_config = GenerationConfig.from_pretrained(
-                pretrained_model_name=os.environ.get("CHAT_MODEL")
+                pretrained_model_name=os.environ.get("CHAT_MODEL_PATH")
             )
         except Exception:
             self._generation_config = GenerationConfig(

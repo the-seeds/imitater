@@ -1,4 +1,4 @@
-from enum import unique, Enum
+from enum import Enum, unique
 
 import click
 from dotenv import load_dotenv
