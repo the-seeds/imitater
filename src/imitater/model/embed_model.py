@@ -25,6 +25,7 @@ class EmbedModel:
         self._model: "PreTrainedModel" = AutoModel.from_pretrained(
             pretrained_model_name_or_path=os.environ.get("EMBED_MODEL_PATH"),
             device_map={"": int(os.environ.get("EMBED_MODEL_DEVICE"))},
+            torch_dtype=torch.float16,
         )
         self._model.eval()
         self._tokenizer: "PreTrainedTokenizerBase" = AutoTokenizer.from_pretrained(
