@@ -1,3 +1,4 @@
+import os
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict
@@ -110,7 +111,7 @@ def launch_app() -> None:
         yield jsonify(chunk)
         yield "[DONE]"
 
-    uvicorn.run(app, host="0.0.0.0", port=8000, workers=1)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("SERVICE_PORT", 8000)), workers=1)
 
 
 if __name__ == "__main__":
