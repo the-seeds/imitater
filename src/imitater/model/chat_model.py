@@ -5,6 +5,7 @@ from transformers import AutoTokenizer, GenerationConfig
 from vllm import AsyncEngineArgs, AsyncLLMEngine, SamplingParams
 
 from ..utils.vllm_monkey_patch import llama_attn_bias_monkey_patch
+from ..function_prompt.react import ReAct
 
 
 if TYPE_CHECKING:
@@ -47,7 +48,8 @@ class ChatModel:
             self._generation_config.max_new_tokens = 1024
 
         if isinstance(self._generation_config.eos_token_id, int):
-            self._generation_config.eos_token_id = [self._generation_config.eos_token_id]
+            self._generation_config.eos_token_id = [
+                self._generation_config.eos_token_id]
 
     async def _generate(
         self, messages: List[Dict[str, str]], request_id: str, **gen_kwargs
@@ -56,10 +58,13 @@ class ChatModel:
             conversation=messages, tokenize=True, add_generation_prompt=True
         )
         sampline_params = SamplingParams(
-            temperature=gen_kwargs.get("temperature", None) or self._generation_config.temperature,
-            top_p=gen_kwargs.get("top_p", None) or self._generation_config.top_p,
-            max_tokens=gen_kwargs.get("max_tokens", None) or self._generation_config.max_new_tokens,
-            stop_token_ids=self._generation_config.eos_token_id,
+            temperature=gen_kwargs.get(
+                "temperature", None) or self._generation_config.temperature,
+            top_p=gen_kwargs.get(
+                "top_p", None) or self._generation_config.top_p,
+            max_tokens=gen_kwargs.get(
+                "max_tokens", None) or self._generation_config.max_new_tokens,
+            stop_token_ids=self._generation_config.eos_token_id
         )
         result_generator = self._engine.generate(
             prompt=None, sampling_params=sampline_params, request_id=request_id, prompt_token_ids=input_ids
@@ -79,6 +84,22 @@ class ChatModel:
         generator = await self._generate(messages, request_id, **gen_kwargs)
         prev_text = ""
         async for result in generator:
-            delta_text = result.outputs[0].text[len(prev_text) :]
+            delta_text = result.outputs[0].text[len(prev_text):]
             prev_text = result.outputs[0].text
             yield delta_text
+
+    async def function_chat(self, messages: List[Dict[str, str]], tools: List[Dict[str, str]], request_id: str, **gen_kwargs) -> str:
+        # make sure the first message is from user
+        content = messages[0]["content"]
+        tools_name = [tool['function']['name'] for tool in tools]
+        prompt = ReAct(content, tools_name).build_prompt()
+        messages[0]["content"] = prompt
+        print("\n\n", prompt, "\n\n")
+        # stop_token_id setting: "Observation"
+        self._generation_config.eos_token_id.append(37763)
+        # generate
+        generator = await self._generate(messages, request_id, **gen_kwargs)
+        prev_text = ""
+        async for result in generator:
+            prev_text = result.outputs[0].text
+        return prev_text
