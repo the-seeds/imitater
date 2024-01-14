@@ -1,6 +1,6 @@
 import time
 from enum import Enum
-from typing import List, Optional, Union, Dict
+from typing import List, Optional, Union, Dict, Any
 
 from pydantic import BaseModel, Field
 
@@ -35,13 +35,19 @@ class ChatMessage(BaseModel):
 
 class FunctionMessage(BaseModel):
     name: str
-    arguments: Dict[str, str]
+    arguments: str
+
+
+class FunctionToolCalls(BaseModel):
+    id: str
+    type: str = "function"
+    function: FunctionMessage
 
 
 class ChatFunctionMessage(BaseModel):
     role: Role
     content: Optional[str] = None
-    tool_calls: Optional[List[FunctionMessage]] = []
+    tool_calls: Optional[List[FunctionToolCalls]] = []
     logprobs: Optional[List[float]] = None
     finish_reason: Optional[str] = "tool_calls"
 

@@ -2,6 +2,7 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict
 
+import json
 import uvicorn
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,7 +11,7 @@ from sse_starlette import EventSourceResponse
 from ..model.chat_model import ChatModel
 from ..model.embed_model import EmbedModel
 from ..utils.generic import dictify, jsonify, torch_gc
-from ..function_prompt.react_parser import ReactParser
+from ..function_prompt.react_parser import ReActParser
 from .protocol import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -18,6 +19,7 @@ from .protocol import (
     ChatCompletionStreamResponse,
     ChatCompletionStreamResponseChoice,
     FunctionMessage,
+    FunctionToolCalls,
     ChatFunctionMessage,
     ChatMessage,
     DeltaMessage,
@@ -92,16 +94,20 @@ def launch_app() -> None:
         else:
             input_kwargs["tools"] = request.tools
             response = await chat_model.function_chat(**input_kwargs)
-            action, action_input, response = ReactParser().parse_latest_plugin_call(
-                response)
+            action, action_input, response = ReActParser().parse_latest_plugin_call(response)
             function_message = FunctionMessage(
                 name=action,
-                arguments=action_input
+                arguments=json.dumps(action_input)
+            )
+            tool_calls = FunctionToolCalls(
+                id=input_kwargs["request_id"],
+                type="function",
+                function=function_message
             )
             choice = ChatCompletionResponseChoice(
                 index=0,
                 message=ChatFunctionMessage(role=Role.ASSISTANT, content=None,
-                                            tool_calls=[function_message], logprobs=None, finish_reason=Finish.STOP),
+                                            tool_calls=[tool_calls], logprobs=None, finish_reason=Finish.STOP),
                 finish_reason=Finish.STOP
             )
 

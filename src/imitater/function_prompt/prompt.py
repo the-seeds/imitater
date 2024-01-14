@@ -2,14 +2,9 @@ json_format_prompt = """in a JSON format representing the kwargs (e.g. {{"input"
 json_format_warning_prompt = """Please use a valid JSON format for the Action Input. Do NOT do this {{'input': 'hello world', 'num_beams': 5}}."""
 
 REACT_PROMPT = """You are designed to help with a variety of tasks, from answering questions \
-to providing summaries to other types of analyses.
+to providing summaries to other types of analyses.Answer the following questions as best you can.
 
 ## Tools
-You have access to a wide variety of tools. You are responsible for using
-the tools in any sequence you deem appropriate to complete the task at hand.
-This may require breaking the task into subtasks and using different tools
-to complete each subtask.
-
 You have access to the following tools:
 {tools_text}
 

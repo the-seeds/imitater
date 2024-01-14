@@ -11,7 +11,6 @@ class ReActParser(object):
         self.observation_stop = '\nThought:'
 
     def parse_latest_plugin_call(self, text):
-        print("\n\n\n\n\ntext:", text, "\n\n\n\n\n")
         action = self.action
         action_input = self.action_input
         observation = self.action_input_stop
@@ -28,13 +27,14 @@ class ReActParser(object):
             plugin_name = text[i + len(action):j].strip()
             plugin_args = text[j + len(action_input):k].strip()
             text = text[:k]
-        # print("\n\n\n\n\nplugin_name:", plugin_name, "\n\n\n\n\n")
-        # print("\n\n\n\n\nplugin_args:", plugin_args, "\n\n\n\n\n")
-        # plugin_args = plugin_args.replace('"""', '"').replace('"', '\\"')
         try:
             plugin_args = json.loads(plugin_args)
         except:
-            plugin_args = {"code": plugin_args}
+            # only code interpreter return a not json format action input
+            if plugin_name == 'code_interpreter':
+                plugin_args = {"code": plugin_args}
+            else:
+                plugin_args = {}
         return plugin_name, plugin_args, text
 
     def _extract_first_target(self, text, start_flag, end_flag):

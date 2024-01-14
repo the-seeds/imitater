@@ -91,12 +91,10 @@ class ChatModel:
     async def function_chat(self, messages: List[Dict[str, str]], tools: List[Dict[str, str]], request_id: str, **gen_kwargs) -> str:
         # make sure the first message is from user
         content = messages[0]["content"]
-        tools_name = [tool['function']['name'] for tool in tools]
-        prompt = ReAct(content, tools_name).build_prompt()
+        react = ReAct(content, tools)
+        prompt = react.build_prompt()
         messages[0]["content"] = prompt
-        print("\n\n", prompt, "\n\n")
-        # stop_token_id setting: "Observation"
-        self._generation_config.eos_token_id.append(37763)
+        self._generation_config.eos_token_id.append(react.get_stop_word_id)
         # generate
         generator = await self._generate(messages, request_id, **gen_kwargs)
         prev_text = ""
