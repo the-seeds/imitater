@@ -1,21 +1,19 @@
-import os
+from typing import Any, Dict
+
 from ..function_prompt.prompt import REACT_PROMPT, json_format_prompt, json_format_warning_prompt
-from typing import Dict, Any
 
 
 class ReAct(object):
-
     def __init__(self, query: str, tools: Dict[str, Any]):
         self.query = query
         self.react_template = REACT_PROMPT
-        self.prompt = ''
+        self.prompt = ""
         self.tools_map = self.filter_tools_map(tools)
 
     def filter_tools_map(self, tools):
-        tools_map = {tool['function']['name']: tool['function']
-                     for tool in tools}
-        if 'code_interpreter' in tools_map.keys():
-            tools_map = {'code_interpreter': tools_map['code_interpreter']}
+        tools_map = {tool["function"]["name"]: tool["function"] for tool in tools}
+        if "code_interpreter" in tools_map.keys():
+            tools_map = {"code_interpreter": tools_map["code_interpreter"]}
         return tools_map
 
     def build_prompt(self):
@@ -26,8 +24,10 @@ class ReAct(object):
             query=query,
             tools_text=tools_text,
             tools_name_text=tools_name_text,
-            json_format_prompt=json_format_prompt if 'code_interpreter' not in self.tools_map.keys() else '',
-            json_format_warning_prompt=json_format_warning_prompt if 'code_interpreter' not in self.tools_map.keys() else ''
+            json_format_prompt=json_format_prompt if "code_interpreter" not in self.tools_map.keys() else "",
+            json_format_warning_prompt=json_format_warning_prompt
+            if "code_interpreter" not in self.tools_map.keys()
+            else "",
         )
         self.prompt = planning_prompt
         return planning_prompt
@@ -47,10 +47,10 @@ class ReAct(object):
         return "\n".join(self.tools_map.keys())
 
     def build_observation(self, observation):
-        return f'\nObservation: {observation}\nThought:'
+        return f"\nObservation: {observation}\nThought:"
 
     def get_stop_words_list(self):
-        return ['Observation:', 'Observation:\n', 'Observ']
+        return ["Observation:", "Observation:\n", "Observ"]
 
     def get_stop_word_id(self):
         return 37763

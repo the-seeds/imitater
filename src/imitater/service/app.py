@@ -1,25 +1,23 @@
+import json
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict
 
-import json
 import uvicorn
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette import EventSourceResponse
 
+from ..function_prompt.react_parser import ReActParser
 from ..model.chat_model import ChatModel
 from ..model.embed_model import EmbedModel
 from ..utils.generic import dictify, jsonify, torch_gc
-from ..function_prompt.react_parser import ReActParser
 from .protocol import (
     ChatCompletionRequest,
     ChatCompletionResponse,
     ChatCompletionResponseChoice,
     ChatCompletionStreamResponse,
     ChatCompletionStreamResponseChoice,
-    FunctionMessage,
-    FunctionToolCalls,
     ChatFunctionMessage,
     ChatMessage,
     DeltaMessage,
@@ -27,6 +25,8 @@ from .protocol import (
     EmbeddingsRequest,
     EmbeddingsResponse,
     Finish,
+    FunctionMessage,
+    FunctionToolCalls,
     ModelCard,
     ModelList,
     Role,
@@ -68,8 +68,7 @@ def launch_app() -> None:
         return EmbeddingsResponse(
             data=embeddings,
             model=request.model,
-            usage=UsageInfo(prompt_tokens=0,
-                            completion_tokens=None, total_tokens=0),
+            usage=UsageInfo(prompt_tokens=0, completion_tokens=None, total_tokens=0),
         )
 
     @app.post("/v1/chat/completions", response_model=ChatCompletionResponse, status_code=status.HTTP_200_OK)
@@ -95,50 +94,43 @@ def launch_app() -> None:
             input_kwargs["tools"] = request.tools
             response = await chat_model.function_chat(**input_kwargs)
             action, action_input, response = ReActParser().parse_latest_plugin_call(response)
-            function_message = FunctionMessage(
-                name=action,
-                arguments=json.dumps(action_input)
-            )
-            tool_calls = FunctionToolCalls(
-                id=input_kwargs["request_id"],
-                type="function",
-                function=function_message
-            )
+            function_message = FunctionMessage(name=action, arguments=json.dumps(action_input))
+            tool_calls = FunctionToolCalls(id=input_kwargs["request_id"], type="function", function=function_message)
             choice = ChatCompletionResponseChoice(
                 index=0,
-                message=ChatFunctionMessage(role=Role.ASSISTANT, content=None,
-                                            tool_calls=[tool_calls], logprobs=None, finish_reason=Finish.STOP),
-                finish_reason=Finish.STOP
+                message=ChatFunctionMessage(
+                    role=Role.ASSISTANT,
+                    content=None,
+                    tool_calls=[tool_calls],
+                    logprobs=None,
+                    finish_reason=Finish.STOP,
+                ),
+                finish_reason=Finish.STOP,
             )
 
         return ChatCompletionResponse(
             id=input_kwargs["request_id"],
             model=request.model,
             choices=[choice],
-            usage=UsageInfo(prompt_tokens=0,
-                            completion_tokens=0, total_tokens=0),
+            usage=UsageInfo(prompt_tokens=0, completion_tokens=0, total_tokens=0),
         )
 
     async def create_stream_chat_completion(request: ChatCompletionRequest, input_kwargs: Dict[str, Any]):
         choice = ChatCompletionStreamResponseChoice(
             index=0, delta=DeltaMessage(role=Role.ASSISTANT, content=""), finish_reason=None
         )
-        chunk = ChatCompletionStreamResponse(
-            id=input_kwargs["request_id"], model=request.model, choices=[choice])
+        chunk = ChatCompletionStreamResponse(id=input_kwargs["request_id"], model=request.model, choices=[choice])
         yield jsonify(chunk)
 
         async for new_token in chat_model.stream_chat(**input_kwargs):
             choice = ChatCompletionStreamResponseChoice(
                 index=0, delta=DeltaMessage(content=new_token), finish_reason=None
             )
-            chunk = ChatCompletionStreamResponse(
-                id=input_kwargs["request_id"], model=request.model, choices=[choice])
+            chunk = ChatCompletionStreamResponse(id=input_kwargs["request_id"], model=request.model, choices=[choice])
             yield jsonify(chunk)
 
-        choice = ChatCompletionStreamResponseChoice(
-            index=0, delta=DeltaMessage(), finish_reason=Finish.STOP)
-        chunk = ChatCompletionStreamResponse(
-            id=input_kwargs["request_id"], model=request.model, choices=[choice])
+        choice = ChatCompletionStreamResponseChoice(index=0, delta=DeltaMessage(), finish_reason=Finish.STOP)
+        chunk = ChatCompletionStreamResponse(id=input_kwargs["request_id"], model=request.model, choices=[choice])
         yield jsonify(chunk)
         yield "[DONE]"
 
