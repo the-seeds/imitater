@@ -15,13 +15,16 @@ Create a `.env` file in the root directory:
 
 ```
 # imitater
-CHAT_MODEL=hiyouga/Qwen-14B-Chat-LLaMAfied
-EMBED_MODEL=BAAI/bge-small-zh-v1.5
+CHAT_MODEL_PATH=hiyouga/Qwen-14B-Chat-LLaMAfied
+CHAT_MODEL_DEVICE=0
+EMBED_MODEL_PATH=BAAI/bge-small-zh-v1.5
+EMBED_MODEL_DEVICE=1
 EMBED_BATCH_SIZE=16
 ENABLE_ATTN_BIAS=1
+SERVICE_PORT=8010
 
 # tests
-OPENAI_BASE_URL=http://192.168.0.1:8000/v1
+OPENAI_BASE_URL=http://192.168.0.1:8010/v1
 OPENAI_API_KEY=0
 ```
 
