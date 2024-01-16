@@ -15,12 +15,16 @@ Create a `.env` file in the root directory:
 
 ```
 # imitater
-CHAT_MODEL_PATH=hiyouga/Qwen-14B-Chat-LLaMAfied
+AGENT_TYPE=react
+
+CHAT_MODEL_PATH=Qwen/Qwen-14B-Chat
 CHAT_MODEL_DEVICE=0
+CHAT_TEMPLATE_PATH=templates/qwen.jinja
+
 EMBED_MODEL_PATH=BAAI/bge-small-zh-v1.5
 EMBED_MODEL_DEVICE=1
 EMBED_BATCH_SIZE=16
-ENABLE_ATTN_BIAS=1
+
 SERVICE_PORT=8010
 
 # tests
