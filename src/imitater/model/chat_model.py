@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, AsyncIterator, Dict, Generator, List
 from transformers import AutoTokenizer, GenerationConfig
 from vllm import AsyncEngineArgs, AsyncLLMEngine, SamplingParams
 
+from ..function_prompt.react import ReAct
 from ..utils.vllm_monkey_patch import llama_attn_bias_monkey_patch
 
 
@@ -86,3 +87,19 @@ class ChatModel:
             delta_text = result.outputs[0].text[len(prev_text) :]
             prev_text = result.outputs[0].text
             yield delta_text
+
+    async def function_chat(
+        self, messages: List[Dict[str, str]], tools: List[Dict[str, str]], request_id: str, **gen_kwargs
+    ) -> str:
+        # make sure the first message is from user
+        content = messages[0]["content"]
+        react = ReAct(content, tools)
+        prompt = react.build_prompt()
+        messages[0]["content"] = prompt
+        self._generation_config.eos_token_id.append(react.get_stop_word_id)
+        # generate
+        generator = await self._generate(messages, request_id, **gen_kwargs)
+        prev_text = ""
+        async for result in generator:
+            prev_text = result.outputs[0].text
+        return prev_text

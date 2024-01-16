@@ -33,6 +33,25 @@ class ChatMessage(BaseModel):
     content: str
 
 
+class FunctionMessage(BaseModel):
+    name: str
+    arguments: str
+
+
+class FunctionToolCalls(BaseModel):
+    id: str
+    type: str = "function"
+    function: FunctionMessage
+
+
+class ChatFunctionMessage(BaseModel):
+    role: Role
+    content: Optional[str] = None
+    tool_calls: Optional[List[FunctionToolCalls]] = []
+    logprobs: Optional[List[float]] = None
+    finish_reason: Optional[str] = "tool_calls"
+
+
 class DeltaMessage(BaseModel):
     role: Optional[Role] = None
     content: Optional[str] = None
@@ -52,11 +71,12 @@ class ChatCompletionRequest(BaseModel):
     n: Optional[int] = 1
     max_tokens: Optional[int] = None
     stream: Optional[bool] = False
+    tools: Optional[List] = None
 
 
 class ChatCompletionResponseChoice(BaseModel):
     index: int
-    message: ChatMessage
+    message: Union[ChatMessage, ChatFunctionMessage]
     finish_reason: Finish
 
 

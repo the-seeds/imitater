@@ -1,3 +1,4 @@
+import json
 import os
 import uuid
 from contextlib import asynccontextmanager
@@ -8,6 +9,7 @@ from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette import EventSourceResponse
 
+from ..function_prompt.react_parser import ReActParser
 from ..model.chat_model import ChatModel
 from ..model.embed_model import EmbedModel
 from ..utils.generic import dictify, jsonify, torch_gc
@@ -17,12 +19,15 @@ from .protocol import (
     ChatCompletionResponseChoice,
     ChatCompletionStreamResponse,
     ChatCompletionStreamResponseChoice,
+    ChatFunctionMessage,
     ChatMessage,
     DeltaMessage,
     Embeddings,
     EmbeddingsRequest,
     EmbeddingsResponse,
     Finish,
+    FunctionMessage,
+    FunctionToolCalls,
     ModelCard,
     ModelList,
     Role,
@@ -81,10 +86,29 @@ def launch_app() -> None:
             generator = create_stream_chat_completion(request, input_kwargs)
             return EventSourceResponse(generator, media_type="text/event-stream")
 
-        response = await chat_model.chat(**input_kwargs)
-        choice = ChatCompletionResponseChoice(
-            index=0, message=ChatMessage(role=Role.ASSISTANT, content=response), finish_reason=Finish.STOP
-        )
+        if not request.tools:
+            response = await chat_model.chat(**input_kwargs)
+            choice = ChatCompletionResponseChoice(
+                index=0, message=ChatMessage(role=Role.ASSISTANT, content=response), finish_reason=Finish.STOP
+            )
+        else:
+            input_kwargs["tools"] = request.tools
+            response = await chat_model.function_chat(**input_kwargs)
+            action, action_input, response = ReActParser().parse_latest_plugin_call(response)
+            function_message = FunctionMessage(name=action, arguments=json.dumps(action_input))
+            tool_calls = FunctionToolCalls(id=input_kwargs["request_id"], type="function", function=function_message)
+            choice = ChatCompletionResponseChoice(
+                index=0,
+                message=ChatFunctionMessage(
+                    role=Role.ASSISTANT,
+                    content=None,
+                    tool_calls=[tool_calls],
+                    logprobs=None,
+                    finish_reason=Finish.STOP,
+                ),
+                finish_reason=Finish.STOP,
+            )
+
         return ChatCompletionResponse(
             id=input_kwargs["request_id"],
             model=request.model,
