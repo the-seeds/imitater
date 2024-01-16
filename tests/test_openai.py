@@ -18,6 +18,7 @@ except ImportError:
 class Action(str, Enum):
     CHAT = "chat"
     EMBED = "embed"
+    TOOL = "tool"
 
 
 def test_chat(query: str):
@@ -35,19 +36,48 @@ def test_chat(query: str):
 
 def test_embed(query: str):
     client = OpenAI()
-    data = client.embeddings.create(input=query, model="text-embedding-ada-002").data
+    data = client.embeddings.create(input=query, model="text-embedding-ada-002", encoding_format="float").data
     for embedding in data:
         print(embedding.embedding)
+
+
+def test_tool(query: str):
+    client = OpenAI()
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_current_weather",
+                "description": "Get the current weather in a given location",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "location": {"type": "string", "description": "The city and state, e.g. San Francisco, CA"}
+                    },
+                    "required": ["location"],
+                },
+            },
+        }
+    ]
+    result = client.chat.completions.create(
+        messages=[{"role": "user", "content": query}],
+        model="gpt-3.5-turbo",
+        tools=tools,
+    )
+    print(result.choices[0].message)
 
 
 if __name__ == "__main__":
     load_dotenv()
     action = click.prompt("Action", type=click.Choice([act.value for act in Action]))
-    test_func = test_chat if action == Action.CHAT else test_embed
-
     while True:
         query = click.prompt("User", type=str)
         if query == "exit":
             break
 
-        test_func(query)
+        if action == Action.CHAT:
+            test_chat(query)
+        elif action == Action.EMBED:
+            test_embed(query)
+        elif action == Action.TOOL:
+            test_tool(query)

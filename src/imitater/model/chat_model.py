@@ -1,10 +1,10 @@
 import os
-from typing import TYPE_CHECKING, AsyncIterator, Dict, Generator, List
+from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, Generator, List, Tuple, Union
 
 from transformers import AutoTokenizer, GenerationConfig
 from vllm import AsyncEngineArgs, AsyncLLMEngine, SamplingParams
 
-from ..function_prompt.react import ReAct
+from ..agent import get_agent
 from ..utils.vllm_monkey_patch import llama_attn_bias_monkey_patch
 
 
@@ -15,22 +15,34 @@ if TYPE_CHECKING:
 
 class ChatModel:
     def __init__(self) -> None:
+        self._agent = get_agent(os.environ.get("AGENT_TYPE"))
+        self._init_vllm_engine()
+        self._load_tokenizer()
+        self._load_generation_config()
+
+    def _init_vllm_engine(self) -> None:
         if int(os.environ.get("ENABLE_ATTN_BIAS")):
             llama_attn_bias_monkey_patch()
 
-        engine_args = AsyncEngineArgs(model=os.environ.get("CHAT_MODEL_PATH"))
-
+        engine_args = AsyncEngineArgs(model=os.environ.get("CHAT_MODEL_PATH"), trust_remote_code=True)
         if os.environ.get("CHAT_MODEL_DEVICE"):
             engine_args.tensor_parallel_size = len(os.environ.get("CHAT_MODEL_DEVICE").split(","))
 
         self._engine = AsyncLLMEngine.from_engine_args(engine_args)
 
+    def _load_tokenizer(self) -> None:
         self._tokenizer: "PreTrainedTokenizerBase" = AutoTokenizer.from_pretrained(
-            pretrained_model_name_or_path=os.environ.get("CHAT_MODEL_PATH")
+            pretrained_model_name_or_path=os.environ.get("CHAT_MODEL_PATH"), trust_remote_code=True
         )
-        self._load_generation_config()
 
-    def _load_generation_config(self):
+        if os.environ.get("CHAT_TEMPLATE_PATH"):
+            with open(str(os.environ.get("CHAT_TEMPLATE_PATH")), "r", encoding="utf-8") as f:
+                self._tokenizer.chat_template = f.read()
+
+        if self._tokenizer.chat_template is None:
+            raise ValueError("A chat template is required for chat models.")
+
+    def _load_generation_config(self) -> None:
         try:
             self._generation_config = GenerationConfig.from_pretrained(
                 pretrained_model_name=os.environ.get("CHAT_MODEL_PATH")
@@ -60,46 +72,50 @@ class ChatModel:
         input_ids = self._tokenizer.apply_chat_template(
             conversation=messages, tokenize=True, add_generation_prompt=True
         )
-        sampline_params = SamplingParams(
-            temperature=gen_kwargs.get("temperature", None) or self._generation_config.temperature,
-            top_p=gen_kwargs.get("top_p", None) or self._generation_config.top_p,
-            max_tokens=gen_kwargs.get("max_tokens", None) or self._generation_config.max_new_tokens,
-            stop_token_ids=self._generation_config.eos_token_id,
+        sampling_params = SamplingParams(
+            temperature=gen_kwargs.pop("temperature", None) or self._generation_config.temperature,
+            top_p=gen_kwargs.pop("top_p", None) or self._generation_config.top_p,
+            max_tokens=gen_kwargs.pop("max_tokens", None) or self._generation_config.max_new_tokens,
+            stop_token_ids=self._generation_config.eos_token_id + gen_kwargs.pop("stop_token_ids", []),
         )
         result_generator = self._engine.generate(
-            prompt=None, sampling_params=sampline_params, request_id=request_id, prompt_token_ids=input_ids
+            prompt=None, sampling_params=sampling_params, request_id=request_id, prompt_token_ids=input_ids
         )
         return result_generator
 
     async def chat(self, messages: List[Dict[str, str]], request_id: str, **gen_kwargs) -> str:
         generator = await self._generate(messages, request_id, **gen_kwargs)
-        prev_text = ""
+        generated_text = ""
         async for result in generator:
-            prev_text = result.outputs[0].text
-        return prev_text
+            generated_text = result.outputs[0].text
+
+        return generated_text
 
     async def stream_chat(
         self, messages: List[Dict[str, str]], request_id: str, **gen_kwargs
     ) -> Generator[str, None, None]:
         generator = await self._generate(messages, request_id, **gen_kwargs)
-        prev_text = ""
+        generated_text = ""
         async for result in generator:
-            delta_text = result.outputs[0].text[len(prev_text) :]
-            prev_text = result.outputs[0].text
+            delta_text = result.outputs[0].text[len(generated_text) :]
+            generated_text = result.outputs[0].text
             yield delta_text
 
-    async def function_chat(
-        self, messages: List[Dict[str, str]], tools: List[Dict[str, str]], request_id: str, **gen_kwargs
-    ) -> str:
-        # make sure the first message is from user
-        content = messages[0]["content"]
-        react = ReAct(content, tools)
-        prompt = react.build_prompt()
-        messages[0]["content"] = prompt
-        self._generation_config.eos_token_id.append(react.get_stop_word_id)
-        # generate
-        generator = await self._generate(messages, request_id, **gen_kwargs)
-        prev_text = ""
+    async def function_call(
+        self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]], request_id: str, **gen_kwargs
+    ) -> Union[str, Tuple[str, str]]:
+        agent_messages = self._agent.build_prompt(messages, tools)
+        stop_word = self._agent.get_stop_word()
+        if stop_word is not None:
+            gen_kwargs["stop_token_ids"] = [self._tokenizer.encode(stop_word)[0]]
+
+        generator = await self._generate(agent_messages, request_id, **gen_kwargs)
+        generated_text = ""
         async for result in generator:
-            prev_text = result.outputs[0].text
-        return prev_text
+            generated_text = result.outputs[0].text
+
+        stop_token = self._tokenizer.decode(gen_kwargs["stop_token_ids"])
+        if generated_text.endswith(stop_token):
+            generated_text = generated_text[: -len(stop_token)]
+
+        return self._agent.extract_tool(generated_text, tools)

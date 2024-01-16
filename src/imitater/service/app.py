@@ -1,33 +1,30 @@
-import json
+import base64
 import os
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict
 
+import numpy as np
 import uvicorn
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette import EventSourceResponse
 
-from ..function_prompt.react_parser import ReActParser
-from ..model.chat_model import ChatModel
-from ..model.embed_model import EmbedModel
+from ..model import ChatModel, EmbedModel
 from ..utils.generic import dictify, jsonify, torch_gc
 from .protocol import (
+    ChatCompletionMessage,
     ChatCompletionRequest,
     ChatCompletionResponse,
     ChatCompletionResponseChoice,
     ChatCompletionStreamResponse,
     ChatCompletionStreamResponseChoice,
-    ChatFunctionMessage,
-    ChatMessage,
-    DeltaMessage,
     Embeddings,
     EmbeddingsRequest,
     EmbeddingsResponse,
     Finish,
-    FunctionMessage,
-    FunctionToolCalls,
+    Function,
+    FunctionCall,
     ModelCard,
     ModelList,
     Role,
@@ -64,7 +61,10 @@ def launch_app() -> None:
         embed_output = await embed_model(texts)
         embeddings = []
         for i in range(len(embed_output)):
-            embeddings.append(Embeddings(embedding=embed_output[i], index=i))
+            embed_data = embed_output[i]
+            if request.encoding_format == "base64":
+                embed_data = base64.b64encode(np.array(embed_data, dtype=np.float32))
+            embeddings.append(Embeddings(embedding=embed_data, index=i))
 
         return EmbeddingsResponse(
             data=embeddings,
@@ -74,9 +74,10 @@ def launch_app() -> None:
 
     @app.post("/v1/chat/completions", response_model=ChatCompletionResponse, status_code=status.HTTP_200_OK)
     async def create_chat_completion(request: ChatCompletionRequest):
+        msg_id = uuid.uuid4().hex
         input_kwargs = {
             "messages": [dictify(message) for message in request.messages],
-            "request_id": "chatcmpl-{}".format(uuid.uuid4().hex),
+            "request_id": "chatcmpl-{}".format(msg_id),
             "temperature": request.temperature,
             "top_p": request.top_p,
             "max_tokens": request.max_tokens,
@@ -86,27 +87,23 @@ def launch_app() -> None:
             generator = create_stream_chat_completion(request, input_kwargs)
             return EventSourceResponse(generator, media_type="text/event-stream")
 
-        if not request.tools:
-            response = await chat_model.chat(**input_kwargs)
-            choice = ChatCompletionResponseChoice(
-                index=0, message=ChatMessage(role=Role.ASSISTANT, content=response), finish_reason=Finish.STOP
-            )
+        if request.tools is not None:
+            input_kwargs["tools"] = [dictify(tool) for tool in request.tools]
+            result = await chat_model.function_call(**input_kwargs)
         else:
-            input_kwargs["tools"] = request.tools
-            response = await chat_model.function_chat(**input_kwargs)
-            action, action_input, response = ReActParser().parse_latest_plugin_call(response)
-            function_message = FunctionMessage(name=action, arguments=json.dumps(action_input))
-            tool_calls = FunctionToolCalls(id=input_kwargs["request_id"], type="function", function=function_message)
+            result = await chat_model.chat(**input_kwargs)
+
+        if isinstance(result, tuple):
+            name, arguments = result[0], result[1]
+            tool_call = FunctionCall(id="call_{}".format(msg_id), function=Function(name=name, arguments=arguments))
             choice = ChatCompletionResponseChoice(
                 index=0,
-                message=ChatFunctionMessage(
-                    role=Role.ASSISTANT,
-                    content=None,
-                    tool_calls=[tool_calls],
-                    logprobs=None,
-                    finish_reason=Finish.STOP,
-                ),
-                finish_reason=Finish.STOP,
+                message=ChatCompletionMessage(role=Role.ASSISTANT, tool_calls=[tool_call]),
+                finish_reason=Finish.TOOL,
+            )
+        else:
+            choice = ChatCompletionResponseChoice(
+                index=0, message=ChatCompletionMessage(role=Role.ASSISTANT, content=result), finish_reason=Finish.STOP
             )
 
         return ChatCompletionResponse(
@@ -118,19 +115,19 @@ def launch_app() -> None:
 
     async def create_stream_chat_completion(request: ChatCompletionRequest, input_kwargs: Dict[str, Any]):
         choice = ChatCompletionStreamResponseChoice(
-            index=0, delta=DeltaMessage(role=Role.ASSISTANT, content=""), finish_reason=None
+            index=0, delta=ChatCompletionMessage(role=Role.ASSISTANT, content=""), finish_reason=None
         )
         chunk = ChatCompletionStreamResponse(id=input_kwargs["request_id"], model=request.model, choices=[choice])
         yield jsonify(chunk)
 
         async for new_token in chat_model.stream_chat(**input_kwargs):
             choice = ChatCompletionStreamResponseChoice(
-                index=0, delta=DeltaMessage(content=new_token), finish_reason=None
+                index=0, delta=ChatCompletionMessage(content=new_token), finish_reason=None
             )
             chunk = ChatCompletionStreamResponse(id=input_kwargs["request_id"], model=request.model, choices=[choice])
             yield jsonify(chunk)
 
-        choice = ChatCompletionStreamResponseChoice(index=0, delta=DeltaMessage(), finish_reason=Finish.STOP)
+        choice = ChatCompletionStreamResponseChoice(index=0, delta=ChatCompletionMessage(), finish_reason=Finish.STOP)
         chunk = ChatCompletionStreamResponse(id=input_kwargs["request_id"], model=request.model, choices=[choice])
         yield jsonify(chunk)
         yield "[DONE]"

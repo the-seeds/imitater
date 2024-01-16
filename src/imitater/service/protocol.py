@@ -1,31 +1,57 @@
 import time
 from enum import Enum
-from typing import List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field
+from typing_extensions import Literal
 
 
 class Role(str, Enum):
     USER = "user"
     ASSISTANT = "assistant"
     SYSTEM = "system"
+    FUNCTION = "function"
+    TOOL = "tool"
 
 
 class Finish(str, Enum):
     STOP = "stop"
     LENGTH = "length"
+    TOOL = "tool_calls"
 
 
 class ModelCard(BaseModel):
     id: str
-    object: Optional[str] = "model"
-    created: Optional[int] = Field(default_factory=lambda: int(time.time()))
-    owned_by: Optional[str] = "owner"
+    object: Literal["model"]
+    created: int = Field(default_factory=lambda: int(time.time()))
+    owned_by: Literal["owner"]
 
 
 class ModelList(BaseModel):
-    object: Optional[str] = "list"
-    data: Optional[List[ModelCard]] = []
+    object: Literal["list"]
+    data: List[ModelCard] = []
+
+
+class Function(BaseModel):
+    name: str
+    arguments: str
+
+
+class FunctionDefinition(BaseModel):
+    name: str
+    description: str
+    parameters: Dict[str, Any]
+
+
+class FunctionCall(BaseModel):
+    id: str
+    type: Literal["function"] = "function"
+    function: Function
+
+
+class FunctionAvailable(BaseModel):
+    type: Literal["function", "code_interpreter"] = "function"
+    function: Optional[FunctionDefinition] = None
 
 
 class ChatMessage(BaseModel):
@@ -33,28 +59,10 @@ class ChatMessage(BaseModel):
     content: str
 
 
-class FunctionMessage(BaseModel):
-    name: str
-    arguments: str
-
-
-class FunctionToolCalls(BaseModel):
-    id: str
-    type: str = "function"
-    function: FunctionMessage
-
-
-class ChatFunctionMessage(BaseModel):
-    role: Role
-    content: Optional[str] = None
-    tool_calls: Optional[List[FunctionToolCalls]] = []
-    logprobs: Optional[List[float]] = None
-    finish_reason: Optional[str] = "tool_calls"
-
-
-class DeltaMessage(BaseModel):
+class ChatCompletionMessage(BaseModel):
     role: Optional[Role] = None
     content: Optional[str] = None
+    tool_calls: Optional[List[FunctionCall]] = None
 
 
 class UsageInfo(BaseModel):
@@ -66,30 +74,30 @@ class UsageInfo(BaseModel):
 class ChatCompletionRequest(BaseModel):
     model: str
     messages: List[ChatMessage]
+    tools: Optional[List[FunctionAvailable]] = None
     temperature: Optional[float] = None
     top_p: Optional[float] = None
-    n: Optional[int] = 1
+    n: int = 1
     max_tokens: Optional[int] = None
     stream: Optional[bool] = False
-    tools: Optional[List] = None
 
 
 class ChatCompletionResponseChoice(BaseModel):
     index: int
-    message: Union[ChatMessage, ChatFunctionMessage]
+    message: ChatCompletionMessage
     finish_reason: Finish
 
 
 class ChatCompletionStreamResponseChoice(BaseModel):
     index: int
-    delta: DeltaMessage
+    delta: ChatCompletionMessage
     finish_reason: Optional[Finish] = None
 
 
 class ChatCompletionResponse(BaseModel):
     id: str
-    object: Optional[str] = "chat.completion"
-    created: Optional[int] = Field(default_factory=lambda: int(time.time()))
+    object: Literal["chat.completion"] = "chat.completion"
+    created: int = Field(default_factory=lambda: int(time.time()))
     model: str
     choices: List[ChatCompletionResponseChoice]
     usage: UsageInfo
@@ -97,8 +105,8 @@ class ChatCompletionResponse(BaseModel):
 
 class ChatCompletionStreamResponse(BaseModel):
     id: str
-    object: Optional[str] = "chat.completion.chunk"
-    created: Optional[int] = Field(default_factory=lambda: int(time.time()))
+    object: Literal["chat.completion.chunk"] = "chat.completion.chunk"
+    created: int = Field(default_factory=lambda: int(time.time()))
     model: str
     choices: List[ChatCompletionStreamResponseChoice]
 
@@ -106,17 +114,17 @@ class ChatCompletionStreamResponse(BaseModel):
 class EmbeddingsRequest(BaseModel):
     input: Union[str, List[str]]
     model: str
-    encoding_format: Optional[str] = "float"
+    encoding_format: Literal["base64", "float"] = "float"
 
 
 class Embeddings(BaseModel):
-    object: Optional[str] = "embedding"
-    embedding: List[float]
+    object: Literal["embedding"] = "embedding"
+    embedding: Union[List[float], bytes]
     index: int
 
 
 class EmbeddingsResponse(BaseModel):
-    object: Optional[str] = "list"
+    object: Literal["list"] = "list"
     data: List[Embeddings]
     model: str
     usage: UsageInfo
