@@ -21,7 +21,7 @@ class ChatModel:
         self._load_generation_config()
 
     def _init_vllm_engine(self) -> None:
-        if int(os.environ.get("ENABLE_ATTN_BIAS")):
+        if os.environ.get("ENABLE_ATTN_BIAS") and int(os.environ.get("ENABLE_ATTN_BIAS")):
             llama_attn_bias_monkey_patch()
 
         engine_args = AsyncEngineArgs(model=os.environ.get("CHAT_MODEL_PATH"), trust_remote_code=True)
