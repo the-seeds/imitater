@@ -44,9 +44,8 @@ class ChatModel:
 
     def _load_generation_config(self) -> None:
         try:
-            self._generation_config = GenerationConfig.from_pretrained(
-                pretrained_model_name=os.environ.get("CHAT_MODEL_PATH")
-            )
+            generation_config_path = os.environ.get("GENERATION_CONFIG_PATH") or os.environ.get("CHAT_MODEL_PATH")
+            self._generation_config = GenerationConfig.from_pretrained(pretrained_model_name=generation_config_path)
         except Exception:
             self._generation_config = GenerationConfig(
                 pad_token_id=self._tokenizer.pad_token_id,
