@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING, Dict
 
+from .aligned import Aligned
 from .react import ReAct
 
 
@@ -22,4 +23,5 @@ def get_agent(agent_type: str) -> "Agent":
     return agent
 
 
+register_agent(Aligned())
 register_agent(ReAct())

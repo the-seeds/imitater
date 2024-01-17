@@ -1,17 +1,30 @@
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Union
 
 from typing_extensions import Literal
 
 
-_PARAM_TYPE = {"string": str, "integer": int, "float": (int, float), "bool": bool}
+_PARAM_TYPE = {
+    "string": str,
+    "number": (int, float),
+    "integer": int,
+    "float": (int, float),
+    "boolean": bool,
+    "array": list,
+    "object": dict,
+}
 
 
 @dataclass
-class Parameter:
-    name: str
-    type: Literal["string", "integer", "float", "bool"]
+class ParameterValue:
+    type: Literal["string", "number", "integer", "float", "boolean", "array", "object"]
     description: str
+    enum: List[str]
+
+
+@dataclass
+class Parameter(ParameterValue):
+    name: str
 
 
 @dataclass
@@ -21,19 +34,24 @@ class Function:
     parameters: List[Parameter]
     required: List[str]
 
-    def get_param_dict(self) -> Dict[str, Dict[str, str]]:
-        param_dict = {}
+    def get_param_mapping(self) -> Dict[str, "ParameterValue"]:
+        param_mapping = {}
         for param in self.parameters:
-            param_dict[param.name] = {"type": param.type, "description": param.description}
+            param_dict = asdict(param)
+            name = param_dict.pop("name")
+            param_mapping[name] = ParameterValue(**param_dict)
 
-        return param_dict
+        return param_mapping
 
     def verify_param(self, name: str, value: Any) -> bool:
-        param_dict = self.get_param_dict()
-        if name not in param_dict:
+        param_mapping = self.get_param_mapping()
+        if name not in param_mapping:
             return False
 
-        if not isinstance(value, _PARAM_TYPE[param_dict[name]["type"]]):
+        if not isinstance(value, _PARAM_TYPE[param_mapping[name].type]):
+            return False
+
+        if len(param_mapping[name].enum) and value not in param_mapping[name].enum:
             return False
 
         return True
@@ -61,7 +79,12 @@ def get_functions(tools: List[Dict[str, Any]]) -> Dict[str, Function]:
             function_data: Dict[str, Union[str, Dict[str, Any]]] = tool["function"]
             properties: Dict[str, Dict[str, Any]] = function_data["parameters"].get("properties", {})
             parameters = [
-                Parameter(name=name, type=prop.get("type", ""), description=prop.get("description", ""))
+                Parameter(
+                    name=name,
+                    type=prop.get("type", ""),
+                    description=prop.get("description", ""),
+                    enum=prop.get("enum", []),
+                )
                 for name, prop in properties.items()
             ]
             functions[function_data["name"]] = Function(
@@ -84,7 +107,8 @@ if __name__ == "__main__":
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "location": {"type": "string", "description": "The city and state, e.g. San Francisco, CA"}
+                        "location": {"type": "string", "description": "The city and state, e.g. San Francisco, CA"},
+                        "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]},
                     },
                     "required": ["location"],
                 },
@@ -93,7 +117,9 @@ if __name__ == "__main__":
     ]
     functions = get_functions(tools)
     print(functions)
-    print(functions["get_current_weather"].get_param_dict())
+    print(functions["get_current_weather"].get_param_mapping())
     print(functions["get_current_weather"].verify_param("city", "San Francisco"))
     print(functions["get_current_weather"].verify_param("location", 0))
     print(functions["get_current_weather"].verify_param("location", "San Francisco"))
+    print(functions["get_current_weather"].verify_param("unit", "test"))
+    print(functions["get_current_weather"].verify_param("unit", "fahrenheit"))

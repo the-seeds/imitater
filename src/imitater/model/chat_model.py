@@ -40,7 +40,7 @@ class ChatModel:
                 self._tokenizer.chat_template = f.read()
 
         if self._tokenizer.chat_template is None:
-            raise ValueError("A chat template is required for chat models.")
+            print("Chat template is not found, use the default one.")
 
     def _load_generation_config(self) -> None:
         try:
@@ -114,8 +114,9 @@ class ChatModel:
         async for result in generator:
             generated_text = result.outputs[0].text
 
-        stop_token = self._tokenizer.decode(gen_kwargs["stop_token_ids"])
-        if generated_text.endswith(stop_token):
-            generated_text = generated_text[: -len(stop_token)]
+        if stop_word is not None:
+            stop_token = self._tokenizer.decode(gen_kwargs["stop_token_ids"])
+            if generated_text.endswith(stop_token):
+                generated_text = generated_text[: -len(stop_token)]
 
         return self._agent.extract_tool(generated_text, tools)

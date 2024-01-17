@@ -41,7 +41,7 @@ def test_embed(query: str):
         print(embedding.embedding)
 
 
-def test_tool(query: str):
+def test_tool():
     client = OpenAI()
     tools = [
         {
@@ -60,7 +60,20 @@ def test_tool(query: str):
         }
     ]
     result = client.chat.completions.create(
-        messages=[{"role": "user", "content": query}],
+        messages=[{"role": "user", "content": "What is the weather like in Boston?"}],
+        model="gpt-3.5-turbo",
+        tools=tools,
+    )
+    print(result.choices[0].message)
+    result = client.chat.completions.create(
+        messages=[
+            {"role": "user", "content": "What is the weather like in Boston?"},
+            {
+                "role": "function",
+                "content": '{"name": "get_current_weather", "arguments": {"location": "Boston, MA"}}',
+            },
+            {"role": "tool", "content": '{"temperature": 22, "unit": "celsius", "description": "Sunny"}'},
+        ],
         model="gpt-3.5-turbo",
         tools=tools,
     )
@@ -70,14 +83,15 @@ def test_tool(query: str):
 if __name__ == "__main__":
     load_dotenv()
     action = click.prompt("Action", type=click.Choice([act.value for act in Action]))
-    while True:
-        query = click.prompt("User", type=str)
-        if query == "exit":
-            break
+    if action == Action.TOOL:
+        test_tool()
+    else:
+        while True:
+            query = click.prompt("User", type=str)
+            if query == "exit":
+                break
 
-        if action == Action.CHAT:
-            test_chat(query)
-        elif action == Action.EMBED:
-            test_embed(query)
-        elif action == Action.TOOL:
-            test_tool(query)
+            if action == Action.CHAT:
+                test_chat(query)
+            elif action == Action.EMBED:
+                test_embed(query)

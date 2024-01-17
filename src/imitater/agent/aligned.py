@@ -18,41 +18,19 @@ JSON_FORMAT_PROMPT = (
 CODE_FORMAT_PROMPT = ", in triple backticks (e.g. ```code goes here```)"
 
 
-REACT_PROMPT = (
-    "Answer the following questions as best you can. "
+TOOL_SYSTEM_PROMPT = (
     "You have access to the following tools:\n{tool_text}"
     "Use the following format to answer the question:\n"
     "```\n"
-    "Thought: I need to use a tool to help me answer the question.\n"
     "Action: the action to take, should be one of [{tool_names}] if using a tool.\n"
     "Action Input: the input to the action{format_prompt}.\n"
-    "```\n\n"
-    "Please ALWAYS start with a Thought. "
-    "If this format is used, the user will respond in the following format:\n"
-    "```\n"
-    "Observation: [tool response]\n"
-    "```\n\n"
-    "You should keep repeating the above format until you have enough information "
-    "to answer the question without using any more tools. At that point, you MUST respond "
-    "in the one of the following two formats:\n"
-    "```\n"
-    "Thought: I can answer without using any more tools.\n"
-    "Answer: [your answer here]\n"
-    "```\n"
-    "```\n"
-    "Thought: I cannot answer the question with the provided tools.\n"
-    "Answer: Sorry, I cannot answer your question.\n"
-    "```\n\n"
-    "Below is the current conversation consisting of interleaving human and assistant messages.\n"
-    "```\n"
-    "{messages_text}"
     "```"
 )
 
 
-class ReAct(Agent):
+class Aligned(Agent):
     def __init__(self) -> None:
-        self.type = "react"
+        self.type = "aligned"
 
     def _build_tool_text(self, functions: Dict[str, "Function"]) -> str:
         tool_text = ""
@@ -71,39 +49,31 @@ class ReAct(Agent):
 
         return tool_text
 
-    def _build_messages_text(self, messages: List[Dict[str, str]]) -> str:
-        messages_text = ""
-        for message in messages:
-            if message["role"] == "user":
-                messages_text += "Human: {}\n".format(message["content"])
-
-            elif message["role"] == "assistant":
-                messages_text += "Assistant: {}\n".format(message["content"])
-
-            elif message["role"] == "tool":
-                messages_text += "Observation: {}\n".format(message["content"])
-
-            elif message["role"] == "function":
-                try:
-                    tool_call: Dict[str, str] = json.loads(message["content"])
-                except json.JSONDecodeError:
-                    print("Invalid json string.")
-
-                messages_text += "Action: {}\nAction Input: {}\n".format(
-                    tool_call.get("name", ""), tool_call.get("arguments", "")
-                )
-
-        return messages_text
-
     def build_prompt(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]]) -> List[Dict[str, str]]:
         functions = get_functions(tools)
-        prompt = REACT_PROMPT.format(
+        tool_prompt = TOOL_SYSTEM_PROMPT.format(
             tool_text=self._build_tool_text(functions),
             tool_names=", ".join(functions.keys()),
             format_prompt=CODE_FORMAT_PROMPT if "code_interpreter" in functions else JSON_FORMAT_PROMPT,
-            messages_text=self._build_messages_text(messages),
         )
-        return [{"role": "user", "content": prompt}]
+        agent_messages = []
+        if messages[0]["role"] == "system":
+            system_message, messages = messages[0], messages[1:]
+            agent_messages.append({"role": "system", "content": system_message["content"] + tool_prompt})
+        else:
+            agent_messages.append({"role": "system", "content": tool_prompt})
+
+        for message in messages:
+            if message["role"] == "function":
+                tool_call: Dict[str, str] = json.loads(message["content"])
+                function_repr = "Action: {}\nAction Input: {}\n".format(
+                    tool_call.get("name", ""), tool_call.get("arguments", "")
+                )
+                agent_messages.append({"role": "assistant", "content": function_repr})
+            else:
+                agent_messages.append(message)
+
+        return agent_messages
 
     def extract_tool(self, answer: str, tools: Dict[str, Any]) -> Union[str, Tuple[str, str]]:
         functions = get_functions(tools)
@@ -129,15 +99,10 @@ class ReAct(Agent):
 
             return tool_name, json.dumps(arguments, ensure_ascii=False)
         else:
-            regex = re.compile(r"Answer:\s*(.*)", re.DOTALL)
-            answer_match = re.search(regex, answer)
-            if answer_match:
-                return answer_match.group(1).strip()
-            else:
-                return "Failed: answers not found."
+            return answer
 
-    def get_stop_word(self) -> str:
-        return "Observation"
+    def get_stop_word(self) -> None:
+        return None
 
 
 if __name__ == "__main__":
@@ -158,12 +123,12 @@ if __name__ == "__main__":
             },
         }
     ]
-    react = ReAct()
+    aligned = Aligned()
     messages = [{"role": "user", "content": "What is the weather like in Boston?"}]
-    print(react.build_prompt(messages, tools))
+    print(aligned.build_prompt(messages, tools))
 
     answer = """Action: get_current_weather\nAction Input: {\n"location": "Boston, MA"\n}"""
-    print(react.extract_tool(answer, tools))
+    print(aligned.extract_tool(answer, tools))
 
-    answer = "Thought: I can answer.\nAnswer: The weather in Boston is currently sunny."
-    print(react.extract_tool(answer, tools))
+    answer = "The weather in Boston is currently sunny."
+    print(aligned.extract_tool(answer, tools))
