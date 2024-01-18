@@ -70,6 +70,8 @@ class Aligned(Agent):
                     tool_call.get("name", ""), tool_call.get("arguments", "")
                 )
                 agent_messages.append({"role": "assistant", "content": function_repr})
+            elif message["role"] == "tool":  # no observation role
+                agent_messages.append({"role": "user", "content": message["content"]})
             else:
                 agent_messages.append(message)
 
@@ -77,7 +79,7 @@ class Aligned(Agent):
 
     def extract_tool(self, answer: str, tools: Dict[str, Any]) -> Union[str, Tuple[str, str]]:
         functions = get_functions(tools)
-        regex = re.compile(r"Action:\s*([a-zA-Z0-9_]+)\s*Action Input:\s*(.*)", re.DOTALL)
+        regex = re.compile(r"Action:\s*([a-zA-Z0-9_]+).*?Action Input:\s*(.*)", re.DOTALL)
         action_match = re.search(regex, answer)
         if action_match:
             tool_name = action_match.group(1).strip()
