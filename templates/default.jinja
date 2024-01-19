@@ -5,9 +5,9 @@
     {%- if message['role'] == 'system' -%}
         {{ message['content'] }}
     {%- elif message['role'] == 'user' -%}
-        {{ 'Human: ' + message['content'] + '\\n' }}
+        {{ 'Human: ' + message['content'] + '\n' }}
     {%- elif message['role'] == 'assistant' -%}
-        {{ 'Assistant: ' + message['content'] + '\\n' }}
+        {{ 'Assistant: ' + message['content'] + '\n' }}
     {%- endif -%}
 {%- endfor -%}
 {%- if add_generation_prompt and messages[-1]['role'] != 'assistant' -%}
