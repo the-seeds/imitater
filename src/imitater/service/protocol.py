@@ -22,13 +22,13 @@ class Finish(str, Enum):
 
 class ModelCard(BaseModel):
     id: str
-    object: Literal["model"]
+    object: Literal["model"] = "model"
     created: int = Field(default_factory=lambda: int(time.time()))
-    owned_by: Literal["owner"]
+    owned_by: Literal["owner"] = "owner"
 
 
 class ModelList(BaseModel):
-    object: Literal["list"]
+    object: Literal["list"] = "list"
     data: List[ModelCard] = []
 
 
