@@ -20,6 +20,7 @@ class ParameterValue:
     type: Literal["string", "number", "integer", "float", "boolean", "array", "object"]
     description: str
     enum: List[str]
+    item_type: str
 
 
 @dataclass
@@ -54,6 +55,9 @@ class Function:
         if len(param_mapping[name].enum) and value not in param_mapping[name].enum:
             return False
 
+        if param_mapping[name].item_type and not isinstance(value[0], _PARAM_TYPE[param_mapping[name].item_type]):
+            return False
+
         return True
 
 
@@ -84,6 +88,7 @@ def get_functions(tools: List[Dict[str, Any]]) -> Dict[str, Function]:
                     type=prop.get("type", ""),
                     description=prop.get("description", ""),
                     enum=prop.get("enum", []),
+                    item_type=prop.get("items", {}).get("type", ""),
                 )
                 for name, prop in properties.items()
             ]

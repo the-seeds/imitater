@@ -61,8 +61,14 @@ class ReAct(Agent):
             for param in func.parameters:
                 required = ", required" if param.name in func.required else ""
                 enum = ", should be one of [{}]".format(", ".join(param.enum)) if len(param.enum) else ""
-                param_text += "  - {name} ({type}{required}): {desc}{enum}\n".format(
-                    name=param.name, type=param.type, required=required, desc=param.description, enum=enum
+                item_type = ", where each item should be {}".format(param.item_type) if param.item_type else ""
+                param_text += "  - {name} ({type}{required}): {desc}{enum}{item_type}\n".format(
+                    name=param.name,
+                    type=param.type,
+                    required=required,
+                    desc=param.description,
+                    enum=enum,
+                    item_type=item_type,
                 )
 
             tool_text += "> Tool Name: {name}\nTool Description: {desc}\nTool Args:\n{args}\n".format(

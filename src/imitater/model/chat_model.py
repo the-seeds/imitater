@@ -1,4 +1,3 @@
-import os
 from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, Generator, List, Tuple, Union
 
 from transformers import AutoTokenizer, GenerationConfig
@@ -9,34 +8,31 @@ from ..utils.vllm_monkey_patch import llama_attn_bias_monkey_patch
 
 
 if TYPE_CHECKING:
-    from transformers import PreTrainedTokenizerBase
     from vllm import RequestOutput
+
+    from ..config import Config
 
 
 class ChatModel:
-    def __init__(self) -> None:
-        self._agent = get_agent(os.environ.get("AGENT_TYPE"))
+    def __init__(self, config: "Config") -> None:
+        self._config = config
+        self._agent = get_agent(config.agent_type)
         self._init_vllm_engine()
         self._load_tokenizer()
         self._load_generation_config()
 
     def _init_vllm_engine(self) -> None:
-        if os.environ.get("ENABLE_ATTN_BIAS") and int(os.environ.get("ENABLE_ATTN_BIAS")):
+        if self._config.enable_attn_bias:
             llama_attn_bias_monkey_patch()
 
-        engine_args = AsyncEngineArgs(model=os.environ.get("CHAT_MODEL_PATH"), trust_remote_code=True)
-        if os.environ.get("CHAT_MODEL_DEVICE"):
-            engine_args.tensor_parallel_size = len(os.environ.get("CHAT_MODEL_DEVICE").split(","))
-
+        engine_args = AsyncEngineArgs(model=self._config.chat_model_path, trust_remote_code=True)
+        engine_args.tensor_parallel_size = len(self._config.chat_model_device)
         self._engine = AsyncLLMEngine.from_engine_args(engine_args)
 
     def _load_tokenizer(self) -> None:
-        self._tokenizer: "PreTrainedTokenizerBase" = AutoTokenizer.from_pretrained(
-            pretrained_model_name_or_path=os.environ.get("CHAT_MODEL_PATH"), trust_remote_code=True
-        )
-
-        if os.environ.get("CHAT_TEMPLATE_PATH"):
-            with open(str(os.environ.get("CHAT_TEMPLATE_PATH")), "r", encoding="utf-8") as f:
+        self._tokenizer = AutoTokenizer.from_pretrained(self._config.chat_model_path, trust_remote_code=True)
+        if self._config.chat_template_path:
+            with open(self._config.chat_template_path, "r", encoding="utf-8") as f:
                 self._tokenizer.chat_template = f.read()
 
         if self._tokenizer.chat_template is None:
@@ -44,8 +40,8 @@ class ChatModel:
 
     def _load_generation_config(self) -> None:
         try:
-            generation_config_path = os.environ.get("GENERATION_CONFIG_PATH") or os.environ.get("CHAT_MODEL_PATH")
-            self._generation_config = GenerationConfig.from_pretrained(pretrained_model_name=generation_config_path)
+            generation_config_path = self._config.generation_config_path or self._config.chat_model_path
+            self._generation_config = GenerationConfig.from_pretrained(generation_config_path)
         except Exception:
             self._generation_config = GenerationConfig(
                 pad_token_id=self._tokenizer.pad_token_id,
@@ -64,6 +60,15 @@ class ChatModel:
 
         if isinstance(self._generation_config.eos_token_id, int):
             self._generation_config.eos_token_id = [self._generation_config.eos_token_id]
+
+        extra_special_tokens = []
+        for eos_token_id in self._generation_config.eos_token_id:
+            if eos_token_id != self._tokenizer.eos_token_id:
+                extra_special_tokens.append(self._tokenizer.convert_ids_to_tokens(eos_token_id))
+
+        self._engine.engine.tokenizer.add_special_tokens(
+            {"additional_special_tokens": extra_special_tokens}, replace_additional_special_tokens=False
+        )
 
     async def _generate(
         self, messages: List[Dict[str, str]], request_id: str, **gen_kwargs
