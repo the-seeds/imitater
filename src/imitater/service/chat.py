@@ -36,7 +36,7 @@ async def create_chat_completion(
     }
 
     if request.stream:
-        generator = create_stream_chat_completion(request, input_kwargs)
+        generator = create_stream_chat_completion(chat_model, request, input_kwargs)
         return EventSourceResponse(generator, media_type="text/event-stream")
 
     if request.tools is not None:

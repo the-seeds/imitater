@@ -20,10 +20,10 @@ CODE_FORMAT_PROMPT = ", in triple backticks (e.g. ```code goes here```)"
 
 TOOL_SYSTEM_PROMPT = (
     "You have access to the following tools:\n{tool_text}"
-    "Use the following format to answer the question:\n"
+    "Use the following format if using a tool:\n"
     "```\n"
-    "Action: the action to take, should be one of [{tool_names}] if using a tool.\n"
-    "Action Input: the input to the action{format_prompt}.\n"
+    "Action: tool name (one of [{tool_names}]).\n"
+    "Action Input: the input to the tool{format_prompt}.\n"
     "```\n"
 )
 
