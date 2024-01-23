@@ -4,7 +4,6 @@ from transformers import AutoTokenizer, GenerationConfig
 from vllm import AsyncEngineArgs, AsyncLLMEngine, SamplingParams
 
 from ..agent import get_agent
-from ..utils.vllm_monkey_patch import llama_attn_bias_monkey_patch
 
 
 if TYPE_CHECKING:
@@ -22,9 +21,6 @@ class ChatModel:
         self._load_generation_config()
 
     def _init_vllm_engine(self) -> None:
-        if self._config.enable_attn_bias:
-            llama_attn_bias_monkey_patch()
-
         engine_args = AsyncEngineArgs(model=self._config.chat_model_path, trust_remote_code=True)
         engine_args.tensor_parallel_size = len(self._config.chat_model_device)
         self._engine = AsyncLLMEngine.from_engine_args(engine_args)

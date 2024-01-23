@@ -14,5 +14,3 @@ class Config:
     embed_model_path: str
     embed_model_device: List[int]
     embed_batch_size: int
-
-    enable_attn_bias: bool

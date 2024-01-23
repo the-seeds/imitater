@@ -1,4 +1,4 @@
 numpy
 sse-starlette
-transformers
-vllm==0.2.6
+transformers>=4.34.0
+vllm>=0.2.6
