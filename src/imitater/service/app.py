@@ -41,7 +41,6 @@ class Imitater:
             embed_model_path=os.environ.get("EMBED_MODEL_PATH"),
             embed_model_device=list(map(int, os.environ.get("EMBED_MODEL_DEVICE").split(","))),
             embed_batch_size=int(os.environ.get("EMBED_BATCH_SIZE", 16)),
-            enable_attn_bias=int(os.environ.get("ENABLE_ATTN_BIAS", "0")),
         )
 
     def _load_models(self) -> None:
