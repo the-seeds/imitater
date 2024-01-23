@@ -1,4 +1,4 @@
-from imitater.service.app import Imitater
+from imitater import Imitater
 
 
 if __name__ == "__main__":

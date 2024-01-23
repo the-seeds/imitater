@@ -1,7 +1,5 @@
-from dotenv import load_dotenv
+from .service import Imitater
 
 
-__version__ = "0.1.4"
-
-
-load_dotenv()
+__all__ = ["Imitater"]
+__version__ = "0.1.5"

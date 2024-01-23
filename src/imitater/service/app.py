@@ -2,6 +2,7 @@ import os
 from contextlib import asynccontextmanager
 
 import uvicorn
+from dotenv import load_dotenv
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -30,6 +31,7 @@ class Imitater:
     def __init__(self) -> None:
         self.app = FastAPI(lifespan=lifespan)
         self.models = []
+        load_dotenv()
 
     def _load_config(self) -> None:
         self._config = Config(
