@@ -1,0 +1,22 @@
+chat:
+  - name: gpt-3.5-turbo
+    path: Qwen/Qwen-14B-Chat
+    device:
+      - 0
+    maxlen: 4096
+    agent_type: react
+    template: templates/qwen.jinja
+    gen_config: generation_config/qwen
+    port: 8020
+
+embed:
+  - name: text-embedding-ada-002
+    path: /home/incoming/zhengyw/bge-base-zh-v1.5
+    device:
+      - 1
+    batchsize: 64
+    port: 8030
+
+service:
+  host: 127.0.0.1
+  port: 8010

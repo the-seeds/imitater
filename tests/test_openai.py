@@ -1,7 +1,9 @@
+import argparse
 from enum import Enum, unique
+from typing import Any, Dict
 
 import click
-from dotenv import load_dotenv
+import yaml
 from openai import OpenAI
 
 
@@ -21,8 +23,7 @@ class Action(str, Enum):
     TOOL = "tool"
 
 
-def test_chat(query: str):
-    client = OpenAI()
+def test_chat(client: "OpenAI", query: str) -> None:
     stream = client.chat.completions.create(
         messages=[{"role": "user", "content": query}],
         model="gpt-3.5-turbo",
@@ -34,15 +35,13 @@ def test_chat(query: str):
     print()
 
 
-def test_embed(query: str):
-    client = OpenAI()
+def test_embed(client: "OpenAI", query: str) -> None:
     data = client.embeddings.create(input=query, model="text-embedding-ada-002", encoding_format="float").data
     for embedding in data:
         print(embedding.embedding)
 
 
-def test_tool():
-    client = OpenAI()
+def test_tool(client: "OpenAI") -> None:
     tools = [
         {
             "type": "function",
@@ -81,10 +80,22 @@ def test_tool():
 
 
 if __name__ == "__main__":
-    load_dotenv()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-c", "--config", type=str, help="Path to config file.")
+    args = parser.parse_args()
+    with open(getattr(args, "config"), "r", encoding="utf-8") as f:
+        config: Dict[str, Dict[str, Any]] = yaml.safe_load(f)
+
+    client = OpenAI(
+        api_key="0",
+        base_url="http://{host}:{port}/v1".format(
+            host=config["service"].get("host", "192.168.0.1"),
+            port=config["service"].get("port", 8000),
+        ),
+    )
     action = click.prompt("Action", type=click.Choice([act.value for act in Action]))
     if action == Action.TOOL:
-        test_tool()
+        test_tool(client)
     else:
         while True:
             query = click.prompt("User", type=str)
@@ -92,6 +103,6 @@ if __name__ == "__main__":
                 break
 
             if action == Action.CHAT:
-                test_chat(query)
+                test_chat(client, query)
             elif action == Action.EMBED:
-                test_embed(query)
+                test_embed(client, query)

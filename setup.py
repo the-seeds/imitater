@@ -32,7 +32,7 @@ def main():
         url="https://github.com/the-seeds/imitater",
         package_dir={"": "src"},
         packages=find_packages("src"),
-        python_requires=">=3.8.0",
+        python_requires=">=3.9.0",
         install_requires=get_requires(),
         classifiers=[
             "Development Status :: 3 - Alpha",

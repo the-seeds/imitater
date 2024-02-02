@@ -5,45 +5,24 @@
 
 ## Usage
 
-Create a `.env` file in the root directory:
+### Install
 
+
+```bash
+pip install -U imitater
 ```
-.
-├── src
-└── .env
-```
 
-```
-# imitater
-AGENT_TYPE=react
+### Launch Server
 
-CHAT_MODEL_PATH=Qwen/Qwen-14B-Chat
-CHAT_MODEL_DEVICE=0
-CHAT_TEMPLATE_PATH=templates/qwen.jinja
-GENERATION_CONFIG_PATH=generation_config/qwen
-
-EMBED_MODEL_PATH=BAAI/bge-small-zh-v1.5
-EMBED_MODEL_DEVICE=1
-EMBED_BATCH_SIZE=16
-
-SERVICE_PORT=8010
-
-# tests
-OPENAI_BASE_URL=http://192.168.0.1:8010/v1
-OPENAI_API_KEY=0
+```bash
+python -m imitater.service.app -c config/example.yaml
 ```
 
 > [!NOTE]
 > [Chat template](https://huggingface.co/docs/transformers/chat_templating) is required for the chat models.
 
-## Launch Server
+### Test Server
 
 ```bash
-python src/launch.py
-```
-
-## Test Server
-
-```bash
-python tests/test_openai.py
+python tests/test_openai.py -c config/example.yaml
 ```

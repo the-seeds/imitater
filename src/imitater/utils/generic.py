@@ -1,8 +1,6 @@
 import json
 from typing import TYPE_CHECKING, Any, Dict
 
-import torch
-
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
@@ -20,12 +18,3 @@ def jsonify(data: "BaseModel") -> str:
         return json.dumps(data.model_dump(exclude_unset=True), ensure_ascii=False)
     except Exception:  # pydantic v1
         return data.json(exclude_unset=True, ensure_ascii=False)
-
-
-def torch_gc() -> None:
-    r"""
-    Collects GPU memory.
-    """
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-        torch.cuda.ipc_collect()

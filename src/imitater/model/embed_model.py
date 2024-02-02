@@ -1,49 +1,59 @@
-import asyncio
-from typing import TYPE_CHECKING, List, Optional
+from dataclasses import dataclass, fields
+from typing import TYPE_CHECKING, List
 
-import torch
-from transformers import AutoModel, AutoTokenizer
+from infinity_emb import AsyncEmbeddingEngine
+from typing_extensions import Self
 
 
 if TYPE_CHECKING:
-    from transformers import BatchEncoding, PreTrainedModel
+    from argparse import ArgumentParser, Namespace
 
-    from ..config import Config
+    from numpy import float32
+    from numpy.typing import NDArray
 
 
-@torch.inference_mode()
-def _get_embeddings(model: "PreTrainedModel", batch_encoding: "BatchEncoding") -> List[List[float]]:
-    output = model(**batch_encoding.to(model.device))
-    embeddings = output[0][:, 0]
-    embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1).tolist()
-    return embeddings
+@dataclass
+class EmbedConfig:
+    name: str
+    path: str
+    device: List[int]
+    batch_size: int
+    port: int
+
+    @staticmethod
+    def add_cli_args(parser: "ArgumentParser") -> None:
+        parser.add_argument("--name", type=str)
+        parser.add_argument("--path", type=str)
+        parser.add_argument("--device", type=int, nargs="+")
+        parser.add_argument("--batch_size", type=int, default=64)
+        parser.add_argument("--port", type=int)
+
+    @classmethod
+    def from_cli_args(cls, args: "Namespace") -> Self:
+        attrs = [attr.name for attr in fields(cls)]
+        return cls(**{attr: getattr(args, attr) for attr in attrs})
 
 
 class EmbedModel:
-    def __init__(self, config: "Config", max_tasks: Optional[int] = 5) -> None:
-        self._semaphore = asyncio.Semaphore(max_tasks)
-        self._batch_size = config.embed_batch_size
-        self._model: "PreTrainedModel" = AutoModel.from_pretrained(
-            config.embed_model_path,
-            device_map={"": config.embed_model_device[0]},
-            torch_dtype=torch.float16,
+    def __init__(self, config: "EmbedConfig") -> None:
+        self.config = config
+        self.name = config.name
+        if len(config.device) != 1:
+            raise ValueError("Embedding model only accepts one device.")
+
+        self._engine = AsyncEmbeddingEngine(
+            model_name_or_path=config.path,
+            batch_size=config.batch_size,
+            engine="torch",
+            device="cuda",
         )
-        self._model.eval()
-        self._tokenizer = AutoTokenizer.from_pretrained(config.embed_model_path)
-        self._tokenizer.padding_side = "right"
 
-    async def _run_task(self, batch_encoding: "BatchEncoding") -> List[List[float]]:
-        async with self._semaphore:
-            loop = asyncio.get_running_loop()
-            return await loop.run_in_executor(None, _get_embeddings, self._model, batch_encoding)
+    async def startup(self) -> None:
+        await self._engine.astart()
 
-    async def embed(self, texts: List[str]) -> List[List[float]]:
-        results = []
-        for i in range(0, len(texts), self._batch_size):
-            batch_encoding = self._tokenizer(
-                texts[i : i + self._batch_size], padding=True, truncation=True, return_tensors="pt"
-            )
-            embeddings = await self._run_task(batch_encoding)
-            results.extend(embeddings)
+    async def shutdown(self) -> None:
+        await self._engine.astop()
 
-        return results
+    async def embed(self, texts: List[str]) -> List["NDArray[float32]"]:
+        embeddings, _ = await self._engine.embed(texts)
+        return embeddings

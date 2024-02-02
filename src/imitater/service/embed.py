@@ -1,18 +1,17 @@
+import argparse
 import base64
-from typing import TYPE_CHECKING
+from contextlib import asynccontextmanager
 
-import numpy as np
+import uvicorn
+from fastapi import FastAPI, status
 
+from ..model import EmbedConfig, EmbedModel
 from .protocol import (
     Embeddings,
     EmbeddingsRequest,
     EmbeddingsResponse,
     UsageInfo,
 )
-
-
-if TYPE_CHECKING:
-    from ..model import EmbedModel
 
 
 async def create_embeddings(embed_model: "EmbedModel", request: "EmbeddingsRequest") -> "EmbeddingsResponse":
@@ -22,14 +21,42 @@ async def create_embeddings(embed_model: "EmbedModel", request: "EmbeddingsReque
 
     embed_output = await embed_model.embed(texts)
     embeddings = []
-    for i in range(len(embed_output)):
-        embed_data = embed_output[i]
+    for i, embed_data in enumerate(embed_output):
         if request.encoding_format == "base64":
-            embed_data = base64.b64encode(np.array(embed_data, dtype=np.float32))
-        embeddings.append(Embeddings(embedding=embed_data, index=i))
+            embedding = base64.b64encode(embed_data)
+        else:
+            embedding = embed_data.tolist()
+
+        embeddings.append(Embeddings(embedding=embedding, index=i))
 
     return EmbeddingsResponse(
         data=embeddings,
         model=request.model,
         usage=UsageInfo(prompt_tokens=0, completion_tokens=None, total_tokens=0),
     )
+
+
+def launch_server(config: "EmbedConfig") -> None:
+    model = EmbedModel(config)
+
+    @asynccontextmanager
+    async def lifespan(app: "FastAPI") -> None:
+        await model.startup()
+        yield
+        await model.shutdown()
+
+    app = FastAPI(lifespan=lifespan)
+
+    @app.post("/v1/embeddings", response_model=EmbeddingsResponse, status_code=status.HTTP_200_OK)
+    async def create_embeddings_v1(request: "EmbeddingsRequest"):
+        return await create_embeddings(model, request)
+
+    uvicorn.run(app, host="127.0.0.1", port=config.port, workers=1)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    EmbedConfig.add_cli_args(parser)
+    args = parser.parse_args()
+    config = EmbedConfig.from_cli_args(args)
+    launch_server(config)
