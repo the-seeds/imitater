@@ -22,9 +22,16 @@ python -m imitater.service.app -c config/example.yaml
 
 > [!NOTE]
 > [Chat template](https://huggingface.co/docs/transformers/chat_templating) is required for the chat models.
+>
+> Use `export USE_MODELSCOPE_HUB=1` to download model from modelscope.
 
 ### Test Server
 
 ```bash
 python tests/test_openai.py -c config/example.yaml
 ```
+
+### Roadmap
+
+- [ ] Response choices.
+- [ ] Rerank model support.
