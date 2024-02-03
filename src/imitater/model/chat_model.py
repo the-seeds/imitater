@@ -1,11 +1,12 @@
 from dataclasses import dataclass, fields
-from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, Generator, List, Literal, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, Generator, List, Optional, Tuple, Union
 
 from transformers import AutoTokenizer, GenerationConfig
 from typing_extensions import Self
 from vllm import AsyncEngineArgs, AsyncLLMEngine, SamplingParams
 
-from ..agent import get_agent
+from ..agent import get_agent, list_agents
+from ..utils.modelscope import try_download_model_from_ms
 
 
 if TYPE_CHECKING:
@@ -19,22 +20,22 @@ class ChatConfig:
     name: str
     path: str
     device: List[int]
+    port: int
     maxlen: int
-    agent_type: Literal["react", "aligned"]
+    agent_type: str
     template: Optional[str]
     gen_config: Optional[str]
-    port: int
 
     @staticmethod
     def add_cli_args(parser: "ArgumentParser") -> None:
         parser.add_argument("--name", type=str)
         parser.add_argument("--path", type=str)
         parser.add_argument("--device", type=int, nargs="+")
-        parser.add_argument("--maxlen", type=int, default=1024)
-        parser.add_argument("--agent_type", type=str, choices=["react", "aligned"], default="react")
+        parser.add_argument("--port", type=int)
+        parser.add_argument("--maxlen", type=int, default=4096)
+        parser.add_argument("--agent_type", type=str, choices=list_agents(), default="react")
         parser.add_argument("--template", type=str, default=None)
         parser.add_argument("--gen_config", type=str, default=None)
-        parser.add_argument("--port", type=int)
 
     @classmethod
     def from_cli_args(cls, args: "Namespace") -> Self:
@@ -44,6 +45,7 @@ class ChatConfig:
 
 class ChatModel:
     def __init__(self, config: "ChatConfig") -> None:
+        config.path = try_download_model_from_ms(config.path)
         self.config = config
         self.name = config.name
         self._agent = get_agent(config.agent_type)
@@ -118,19 +120,22 @@ class ChatModel:
         )
         return result_generator
 
-    async def chat(self, messages: List[Dict[str, str]], request_id: str, **gen_kwargs) -> str:
+    async def chat(self, messages: List[Dict[str, str]], request_id: str, **gen_kwargs) -> Tuple[str, int, int]:
+        generated_text, prompt_tokens, completion_tokens = "", 0, 0
         generator = await self._generate(messages, request_id, **gen_kwargs)
-        generated_text = ""
         async for result in generator:
-            generated_text = result.outputs[0].text
+            if result.finished:
+                generated_text = result.outputs[0].text
+                prompt_tokens = len(result.prompt_token_ids)
+                completion_tokens = len(result.outputs[0].token_ids)
 
-        return generated_text
+        return generated_text, prompt_tokens, completion_tokens
 
     async def stream_chat(
         self, messages: List[Dict[str, str]], request_id: str, **gen_kwargs
     ) -> Generator[str, None, None]:
-        generator = await self._generate(messages, request_id, **gen_kwargs)
         generated_text = ""
+        generator = await self._generate(messages, request_id, **gen_kwargs)
         async for result in generator:
             delta_text = result.outputs[0].text[len(generated_text) :]
             generated_text = result.outputs[0].text
@@ -138,20 +143,23 @@ class ChatModel:
 
     async def function_call(
         self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]], request_id: str, **gen_kwargs
-    ) -> Union[str, Tuple[str, str]]:
+    ) -> Tuple[Union[str, Tuple[str, str]], int, int]:
+        generated_text, prompt_tokens, completion_tokens = "", 0, 0
         agent_messages = self._agent.build_prompt(messages, tools)
         stop_word = self._agent.get_stop_word()
         if stop_word is not None:
             gen_kwargs["stop_token_ids"] = [self._tokenizer.encode(stop_word)[0]]
 
         generator = await self._generate(agent_messages, request_id, **gen_kwargs)
-        generated_text = ""
         async for result in generator:
-            generated_text = result.outputs[0].text
+            if result.finished:
+                generated_text = result.outputs[0].text
+                prompt_tokens = len(result.prompt_token_ids)
+                completion_tokens = len(result.outputs[0].token_ids)
 
         if stop_word is not None:
             stop_token = self._tokenizer.decode(gen_kwargs["stop_token_ids"])
             if generated_text.endswith(stop_token):
                 generated_text = generated_text[: -len(stop_token)]
 
-        return self._agent.extract_tool(generated_text, tools)
+        return self._agent.extract_tool(generated_text, tools), prompt_tokens, completion_tokens

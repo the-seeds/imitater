@@ -1,6 +1,6 @@
 import argparse
 import uuid
-from typing import Any, Dict, Generator, Union
+from typing import Any, AsyncGenerator, Dict, Optional, Union
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, status
@@ -44,9 +44,9 @@ async def create_chat_completion(
 
     if request.tools is not None:
         input_kwargs["tools"] = [dictify(tool) for tool in request.tools]
-        result = await chat_model.function_call(**input_kwargs)
+        result, prompt_tokens, completion_tokens = await chat_model.function_call(**input_kwargs)
     else:
-        result = await chat_model.chat(**input_kwargs)
+        result, prompt_tokens, completion_tokens = await chat_model.chat(**input_kwargs)
 
     if isinstance(result, tuple):
         name, arguments = result[0], result[1]
@@ -61,33 +61,39 @@ async def create_chat_completion(
             index=0, message=ChatCompletionMessage(role=Role.ASSISTANT, content=result), finish_reason=Finish.STOP
         )
 
+    usage = UsageInfo(
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=prompt_tokens + completion_tokens,
+    )
     return ChatCompletionResponse(
         id=input_kwargs["request_id"],
         model=request.model,
         choices=[choice],
-        usage=UsageInfo(prompt_tokens=0, completion_tokens=0, total_tokens=0),
+        usage=usage,
     )
+
+
+def create_stream_chunk(
+    request_id: str, model: str, delta: "ChatCompletionMessage", finish_reason: Optional[Finish] = None
+) -> str:
+    choice = ChatCompletionStreamResponseChoice(index=0, delta=delta, finish_reason=finish_reason)
+    chunk = ChatCompletionStreamResponse(id=request_id, model=model, choices=[choice])
+    return jsonify(chunk)
 
 
 async def create_stream_chat_completion(
     chat_model: "ChatModel", request: "ChatCompletionRequest", input_kwargs: Dict[str, Any]
-) -> Generator[str, None, None]:
-    choice = ChatCompletionStreamResponseChoice(
-        index=0, delta=ChatCompletionMessage(role=Role.ASSISTANT, content=""), finish_reason=None
+) -> AsyncGenerator[str, None]:
+    yield create_stream_chunk(
+        input_kwargs["request_id"], request.model, ChatCompletionMessage(role=Role.ASSISTANT, content="")
     )
-    chunk = ChatCompletionStreamResponse(id=input_kwargs["request_id"], model=request.model, choices=[choice])
-    yield jsonify(chunk)
-
     async for new_token in chat_model.stream_chat(**input_kwargs):
-        choice = ChatCompletionStreamResponseChoice(
-            index=0, delta=ChatCompletionMessage(content=new_token), finish_reason=None
-        )
-        chunk = ChatCompletionStreamResponse(id=input_kwargs["request_id"], model=request.model, choices=[choice])
-        yield jsonify(chunk)
+        yield create_stream_chunk(input_kwargs["request_id"], request.model, ChatCompletionMessage(content=new_token))
 
-    choice = ChatCompletionStreamResponseChoice(index=0, delta=ChatCompletionMessage(), finish_reason=Finish.STOP)
-    chunk = ChatCompletionStreamResponse(id=input_kwargs["request_id"], model=request.model, choices=[choice])
-    yield jsonify(chunk)
+    yield create_stream_chunk(
+        input_kwargs["request_id"], request.model, ChatCompletionMessage(), finish_reason=Finish.STOP
+    )
     yield "[DONE]"
 
 

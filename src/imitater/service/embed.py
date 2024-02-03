@@ -19,7 +19,7 @@ async def create_embeddings(embed_model: "EmbedModel", request: "EmbeddingsReque
     if isinstance(texts, str):
         texts = [texts]
 
-    embed_output = await embed_model.embed(texts)
+    embed_output, embed_tokens = await embed_model.embed(texts)
     embeddings = []
     for i, embed_data in enumerate(embed_output):
         if request.encoding_format == "base64":
@@ -32,7 +32,7 @@ async def create_embeddings(embed_model: "EmbedModel", request: "EmbeddingsReque
     return EmbeddingsResponse(
         data=embeddings,
         model=request.model,
-        usage=UsageInfo(prompt_tokens=0, completion_tokens=None, total_tokens=0),
+        usage=UsageInfo(prompt_tokens=embed_tokens, completion_tokens=None, total_tokens=embed_tokens),
     )
 
 

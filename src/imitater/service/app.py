@@ -2,7 +2,7 @@ import argparse
 import os
 from subprocess import PIPE, STDOUT, Popen
 from threading import Thread
-from typing import Any, Dict, List, Union
+from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 
 import uvicorn
 import yaml
@@ -43,40 +43,37 @@ def read_message(process: "Popen") -> None:
         print(line.decode("utf-8").strip())
 
 
-async def stream(response: AsyncStream[ChatCompletionChunk]):
-    model = None
-    chunk_id = None
+def create_stream_chunk(
+    request_id: str, model: str, delta: "ChatCompletionMessage", finish_reason: Optional[Finish] = None
+) -> str:
+    choice = ChatCompletionStreamResponseChoice(index=0, delta=delta, finish_reason=finish_reason)
+    chunk = ChatCompletionStreamResponse(id=request_id, model=model, choices=[choice])
+    return jsonify(chunk)
+
+
+async def stream(response: AsyncStream[ChatCompletionChunk]) -> AsyncGenerator[str, None]:
+    request_id, model = None, None
     async for chunk in response:
-        if chunk_id is None:
+        if request_id is None:
+            request_id = chunk.id
             model = chunk.model
-            chunk_id = chunk.id
-            choice = ChatCompletionStreamResponseChoice(
-                index=0, delta=ChatCompletionMessage(role=Role.ASSISTANT, content=""), finish_reason=None
-            )
-            chunk = ChatCompletionStreamResponse(id=chunk_id, model=model, choices=[choice])
-            yield jsonify(chunk)
+            yield create_stream_chunk(request_id, model, ChatCompletionMessage(role=Role.ASSISTANT, content=""))
 
         new_token = chunk.choices[0].delta.content
-        if not new_token:
-            continue
+        if new_token:
+            yield create_stream_chunk(request_id, model, ChatCompletionMessage(content=new_token))
 
-        choice = ChatCompletionStreamResponseChoice(
-            index=0, delta=ChatCompletionMessage(content=new_token), finish_reason=None
-        )
-        chunk = ChatCompletionStreamResponse(id=chunk_id, model=model, choices=[choice])
-        yield jsonify(chunk)
-
-    choice = ChatCompletionStreamResponseChoice(index=0, delta=ChatCompletionMessage(), finish_reason=Finish.STOP)
-    chunk = ChatCompletionStreamResponse(id=chunk_id, model=model, choices=[choice])
-    yield jsonify(chunk)
+    yield create_stream_chunk(request_id, model, ChatCompletionMessage(), finish_reason=Finish.STOP)
     yield "[DONE]"
 
 
-async def create_chat_completion(request: "ChatCompletionRequest", chat_model: "AsyncOpenAI"):
+async def create_chat_completion(
+    request: "ChatCompletionRequest", chat_model: "AsyncOpenAI"
+) -> "ChatCompletionResponse":
     response: "ChatCompletion" = await chat_model.chat.completions.create(
         model=request.model,
         messages=[dictify(message) for message in request.messages],
-        tools=[dictify(tool) for tool in request.tools] if request.tools else None,
+        tools=[dictify(tool) for tool in request.tools] if request.tools is not None else None,
         temperature=request.temperature,
         top_p=request.top_p,
         n=request.n,
@@ -85,8 +82,7 @@ async def create_chat_completion(request: "ChatCompletionRequest", chat_model: "
     )
 
     if request.stream:
-        generator = stream(response)
-        return EventSourceResponse(generator, media_type="text/event-stream")
+        return EventSourceResponse(stream(response), media_type="text/event-stream")
 
     choices = []
     for i, choice in enumerate(response.choices):
@@ -96,6 +92,7 @@ async def create_chat_completion(request: "ChatCompletionRequest", chat_model: "
                 name = tool_call.function.name
                 arguments = tool_call.function.arguments
                 tool_calls.append(FunctionCall(id=tool_call.id, function=Function(name=name, arguments=arguments)))
+
             choices.append(
                 ChatCompletionResponseChoice(
                     index=i,
@@ -162,6 +159,7 @@ def launch_server(config_file: str) -> None:
         cmd += " --name {}".format(chat_config.get("name"))
         cmd += " --path {}".format(chat_config.get("path"))
         cmd += " --device {}".format(" ".join(map(str, chat_config.get("device"))))
+        cmd += " --port {}".format(chat_config.get("port"))
         if chat_config.get("maxlen", None):
             cmd += " --maxlen {}".format(chat_config.get("maxlen"))
         if chat_config.get("agent_type", None):
@@ -170,7 +168,6 @@ def launch_server(config_file: str) -> None:
             cmd += " --template {}".format(chat_config.get("template"))
         if chat_config.get("gen_config", None):
             cmd += " --gen_config {}".format(chat_config.get("gen_config"))
-        cmd += " --port {}".format(chat_config.get("port"))
         env = os.environ
         env["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, chat_config.get("device")))
         processes.append(Popen(cmd, env=env, shell=True, stdout=PIPE, stderr=STDOUT))
@@ -183,9 +180,9 @@ def launch_server(config_file: str) -> None:
         cmd += " --name {}".format(embed_config.get("name"))
         cmd += " --path {}".format(embed_config.get("path"))
         cmd += " --device {}".format(" ".join(map(str, embed_config.get("device"))))
+        cmd += " --port {}".format(embed_config.get("port"))
         if chat_config.get("batch_size", None):
             cmd += " --batch_size {}".format(chat_config.get("batch_size"))
-        cmd += " --port {}".format(embed_config.get("port"))
         env = os.environ
         env["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, embed_config.get("device")))
         processes.append(Popen(cmd, env=env, shell=True, stdout=PIPE, stderr=STDOUT))

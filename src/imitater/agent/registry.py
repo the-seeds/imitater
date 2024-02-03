@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Dict
+from typing import TYPE_CHECKING, Dict, List
 
 from .aligned import Aligned
 from .react import ReAct
@@ -13,6 +13,10 @@ _agents: Dict[str, "Agent"] = {}
 
 def register_agent(agent: "Agent") -> None:
     _agents[agent.type] = agent
+
+
+def list_agents() -> List[str]:
+    return list(_agents.keys())
 
 
 def get_agent(agent_type: str) -> "Agent":

@@ -1,4 +1,4 @@
-from .registry import get_agent
+from .registry import get_agent, list_agents
 
 
-__all__ = ["get_agent"]
+__all__ = ["get_agent", "list_agents"]

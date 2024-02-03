@@ -72,7 +72,7 @@ class Aligned(Agent):
         for message in messages:
             if message["role"] == "function":
                 tool_call: Dict[str, str] = json.loads(message["content"])
-                function_repr = "Action: {}\nAction Input: {}\n".format(
+                function_repr = "Action: {}\nAction Input: {}".format(
                     tool_call.get("name", ""), tool_call.get("arguments", "")
                 )
                 agent_messages.append({"role": "assistant", "content": function_repr})
