@@ -32,7 +32,7 @@ class ChatConfig:
         parser.add_argument("--path", type=str)
         parser.add_argument("--device", type=int, nargs="+")
         parser.add_argument("--port", type=int)
-        parser.add_argument("--maxlen", type=int, default=4096)
+        parser.add_argument("--maxlen", type=int, default=2048)
         parser.add_argument("--agent_type", type=str, choices=list_agents(), default="react")
         parser.add_argument("--template", type=str, default=None)
         parser.add_argument("--gen_config", type=str, default=None)
