@@ -9,7 +9,6 @@ A unified language model server built upon [vllm](https://github.com/vllm-projec
 
 ### Install
 
-
 ```bash
 pip install -U imitater
 ```
@@ -22,18 +21,18 @@ python -m imitater.service.app -c config/example.yaml
 
 <details><summary>Show configuration instruction.</summary>
 
-Add an openai model.
+#### Add an OpenAI model
 
 ```yaml
-- name: Display name
+- name: OpenAI model name
 - token: OpenAI token
 ```
 
-Add a chat model.
+#### Add a chat model
 
 ```yaml
 - name: Display name
-- path: Model name on hub or model path
+- path: Model name on hub or local model path
 - device: Device IDs
 - port: Port ID
 - maxlen: Maximum model length (optional)
@@ -42,11 +41,11 @@ Add a chat model.
 - gen_config: Generation config folder (optional)
 ```
 
-Add an embedding model:
+#### Add an embedding model
 
 ```yaml
 - name: Display name
-- path: Model name on hub or model path
+- path: Model name on hub or local model path
 - device: Device IDs (does not support multi-gpus)
 - port: Port ID
 - batch_size: Batch size (optional)
