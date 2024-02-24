@@ -1,5 +1,5 @@
 from dataclasses import dataclass, fields
-from typing import TYPE_CHECKING, Any, AsyncGenerator, AsyncIterator, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Dict, List, Optional, Tuple, Union
 
 from transformers import AutoTokenizer, GenerationConfig
 from typing_extensions import Self
@@ -11,8 +11,6 @@ from ..utils.modelscope import try_download_model_from_ms
 
 if TYPE_CHECKING:
     from argparse import ArgumentParser, Namespace
-
-    from vllm import RequestOutput
 
 
 @dataclass
@@ -120,9 +118,7 @@ class ChatModel:
             {"additional_special_tokens": extra_special_tokens}, replace_additional_special_tokens=False
         )
 
-    async def _generate(
-        self, messages: List[Dict[str, str]], request_id: str, **gen_kwargs
-    ) -> AsyncIterator["RequestOutput"]:
+    async def _generate(self, messages: List[Dict[str, str]], request_id: str, **gen_kwargs):
         input_ids = self._tokenizer.apply_chat_template(
             conversation=messages, tokenize=True, add_generation_prompt=True
         )
@@ -157,7 +153,7 @@ class ChatModel:
         generated_text, prompt_tokens, completion_tokens = "", 0, 0
         generator = await self._generate(messages, request_id, **gen_kwargs)
         async for result in generator:
-            if result.finished:
+            if not result.finished:
                 generated_text = result.outputs[0].text
                 prompt_tokens = len(result.prompt_token_ids)
                 completion_tokens = len(result.outputs[0].token_ids)
@@ -184,9 +180,10 @@ class ChatModel:
         generated_text = ""
         generator = await self._generate(messages, request_id, **gen_kwargs)
         async for result in generator:
-            delta_text = result.outputs[0].text[len(generated_text) :]
-            generated_text = result.outputs[0].text
-            yield delta_text
+            if not result.finished:
+                delta_text = result.outputs[0].text[len(generated_text) :]
+                generated_text = result.outputs[0].text
+                yield delta_text
 
     async def function_call(
         self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]], request_id: str, **gen_kwargs
