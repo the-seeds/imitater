@@ -14,12 +14,12 @@ from .protocol import (
 )
 
 
-async def create_embeddings(embed_model: "EmbedModel", request: "EmbeddingsRequest") -> "EmbeddingsResponse":
+async def _create_local_embeddings(request: "EmbeddingsRequest", model: "EmbedModel") -> "EmbeddingsResponse":
     texts = request.input
     if isinstance(texts, str):
         texts = [texts]
 
-    embed_output, embed_tokens = await embed_model.embed(texts)
+    embed_output, embed_tokens = await model.embed(texts)
     embeddings = []
     for i, embed_data in enumerate(embed_output):
         if request.encoding_format == "base64":
@@ -40,7 +40,7 @@ def launch_server(config: "EmbedConfig") -> None:
     model = EmbedModel(config)
 
     @asynccontextmanager
-    async def lifespan(app: "FastAPI") -> None:
+    async def lifespan(app: "FastAPI"):
         await model.startup()
         yield
         await model.shutdown()
@@ -49,9 +49,9 @@ def launch_server(config: "EmbedConfig") -> None:
 
     @app.post("/v1/embeddings", response_model=EmbeddingsResponse, status_code=status.HTTP_200_OK)
     async def create_embeddings_v1(request: "EmbeddingsRequest"):
-        return await create_embeddings(model, request)
+        return await _create_local_embeddings(request, model)
 
-    uvicorn.run(app, host="127.0.0.1", port=config.port, workers=1)
+    uvicorn.run(app, port=config.port)
 
 
 if __name__ == "__main__":

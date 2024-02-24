@@ -29,8 +29,7 @@ class Agent(ABC):
             tools: the tool specification in the OpenAI format.
 
         Returns:
-            name, arguments (if tool call exists): the tool name with JSON formatted arguments.
-            response (if tool call does not exist): the assistant response.
+            response | (name, arguments): response text or tool name with JSON arguments if tool exists.
         """
         ...
 

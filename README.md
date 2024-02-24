@@ -20,6 +20,40 @@ pip install -U imitater
 python -m imitater.service.app -c config/example.yaml
 ```
 
+<details><summary>Show configuration instruction.</summary>
+
+Add an openai model.
+
+```yaml
+- name: Display name
+- token: OpenAI token
+```
+
+Add a chat model.
+
+```yaml
+- name: Display name
+- path: Model name on hub or model path
+- device: Device IDs
+- port: Port ID
+- maxlen: Maximum model length (optional)
+- agent_type: Agent type (optional) {react, aligned}
+- template: Template jinja file (optional)
+- gen_config: Generation config folder (optional)
+```
+
+Add an embedding model:
+
+```yaml
+- name: Display name
+- path: Model name on hub or model path
+- device: Device IDs (does not support multi-gpus)
+- port: Port ID
+- batch_size: Batch size (optional)
+```
+
+</details>
+
 > [!NOTE]
 > [Chat template](https://huggingface.co/docs/transformers/chat_templating) is required for the chat models.
 >

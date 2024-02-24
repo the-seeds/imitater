@@ -16,6 +16,14 @@ if TYPE_CHECKING:
 
 @dataclass
 class EmbedConfig:
+    r"""
+    Creates configuration for an embedding model.
+
+    Methods:
+        add_cli_args: adds arguments to a argument parser.
+        from_cli_args: builds configuration based on the command line arguments.
+    """
+
     name: str
     path: str
     device: List[int]
@@ -37,6 +45,15 @@ class EmbedConfig:
 
 
 class EmbedModel:
+    r"""
+    Creates an embedding model for text embeddings.
+
+    Methods:
+        startup: starts the embedding engine.
+        shutdown: stops the embedding engine.
+        embed: calculates text embeddings.
+    """
+
     def __init__(self, config: "EmbedConfig") -> None:
         config.path = try_download_model_from_ms(config.path)
         self.config = config
@@ -50,15 +67,30 @@ class EmbedModel:
         self._engine = AsyncEmbeddingEngine(
             model_name_or_path=self.config.path,
             batch_size=self.config.batch_size,
-            engine="torch",
             device="cuda",
         )
 
     async def startup(self) -> None:
+        r"""
+        Starts the embedding engine.
+        """
         await self._engine.astart()
 
     async def shutdown(self) -> None:
+        r"""
+        Stops the embedding engine.
+        """
         await self._engine.astop()
 
     async def embed(self, texts: List[str]) -> Tuple[List["NDArray[float32]"], int]:
+        r"""
+        Calculates the text embeddings.
+
+        Args:
+            texts: the batched text input.
+
+        Returns:
+            embeddings: the batched embeddings.
+            usage: the number of input tokens.
+        """
         return await self._engine.embed(texts)

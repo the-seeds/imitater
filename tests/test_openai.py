@@ -69,9 +69,9 @@ def test_tool(client: "OpenAI") -> None:
             {"role": "user", "content": "What is the weather like in Boston?"},
             {
                 "role": "function",
-                "content": '{"name": "get_current_weather", "arguments": {"location": "Boston, MA"}}',
+                "content": """{"name": "get_current_weather", "arguments": {"location": "Boston, MA"}}""",
             },
-            {"role": "tool", "content": '{"temperature": 22, "unit": "celsius", "description": "Sunny"}'},
+            {"role": "tool", "content": """{"temperature": 22, "unit": "celsius", "description": "Sunny"}"""},
         ],
         model="gpt-3.5-turbo",
         tools=tools,
@@ -81,7 +81,7 @@ def test_tool(client: "OpenAI") -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--config", type=str, help="Path to config file.")
+    parser.add_argument("-c", "--config", type=str, required=True, help="Path to config file.")
     args = parser.parse_args()
     with open(getattr(args, "config"), "r", encoding="utf-8") as f:
         config: Dict[str, Dict[str, Any]] = yaml.safe_load(f)
@@ -89,7 +89,7 @@ if __name__ == "__main__":
     client = OpenAI(
         api_key="0",
         base_url="http://{host}:{port}/v1".format(
-            host=config["service"].get("host", "192.168.0.1"),
+            host=config["service"].get("host", "localhost"),
             port=config["service"].get("port", 8000),
         ),
     )

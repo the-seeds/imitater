@@ -1,20 +1,19 @@
 import argparse
 import uuid
-from typing import Any, AsyncGenerator, Dict, Optional, Union
+from typing import Any, AsyncGenerator, Dict
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, status
 from sse_starlette import EventSourceResponse
 
 from ..model import ChatConfig, ChatModel
-from ..utils.generic import dictify, jsonify
+from ..utils.generic import dictify
+from .common import create_stream_chunk
 from .protocol import (
     ChatCompletionMessage,
     ChatCompletionRequest,
     ChatCompletionResponse,
     ChatCompletionResponseChoice,
-    ChatCompletionStreamResponse,
-    ChatCompletionStreamResponseChoice,
     Finish,
     Function,
     FunctionCall,
@@ -23,9 +22,24 @@ from .protocol import (
 )
 
 
-async def create_chat_completion(
-    chat_model: "ChatModel", request: "ChatCompletionRequest"
-) -> Union["ChatCompletionResponse", "EventSourceResponse"]:
+async def _create_stream_chat_completion(
+    request: "ChatCompletionRequest", model: "ChatModel", input_kwargs: Dict[str, Any]
+) -> AsyncGenerator[str, None]:
+    yield create_stream_chunk(
+        input_kwargs["request_id"], request.model, ChatCompletionMessage(role=Role.ASSISTANT, content="")
+    )
+    async for new_token in model.stream_chat(**input_kwargs):
+        yield create_stream_chunk(input_kwargs["request_id"], request.model, ChatCompletionMessage(content=new_token))
+
+    yield create_stream_chunk(
+        input_kwargs["request_id"], request.model, ChatCompletionMessage(), finish_reason=Finish.STOP
+    )
+    yield "[DONE]"
+
+
+async def _create_local_chat_completion(
+    request: "ChatCompletionRequest", model: "ChatModel"
+) -> "ChatCompletionResponse":
     msg_id = uuid.uuid4().hex
     input_kwargs = {
         "messages": [dictify(message) for message in request.messages],
@@ -39,14 +53,14 @@ async def create_chat_completion(
         if request.tools is not None:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot stream function calls.")
 
-        generator = create_stream_chat_completion(chat_model, request, input_kwargs)
+        generator = _create_stream_chat_completion(request, model, input_kwargs)
         return EventSourceResponse(generator, media_type="text/event-stream")
 
     if request.tools is not None:
         input_kwargs["tools"] = [dictify(tool) for tool in request.tools]
-        result, prompt_tokens, completion_tokens = await chat_model.function_call(**input_kwargs)
+        result, prompt_tokens, completion_tokens = await model.function_call(**input_kwargs)
     else:
-        result, prompt_tokens, completion_tokens = await chat_model.chat(**input_kwargs)
+        result, prompt_tokens, completion_tokens = await model.chat(**input_kwargs)
 
     if isinstance(result, tuple):
         name, arguments = result[0], result[1]
@@ -74,38 +88,15 @@ async def create_chat_completion(
     )
 
 
-def create_stream_chunk(
-    request_id: str, model: str, delta: "ChatCompletionMessage", finish_reason: Optional[Finish] = None
-) -> str:
-    choice = ChatCompletionStreamResponseChoice(index=0, delta=delta, finish_reason=finish_reason)
-    chunk = ChatCompletionStreamResponse(id=request_id, model=model, choices=[choice])
-    return jsonify(chunk)
-
-
-async def create_stream_chat_completion(
-    chat_model: "ChatModel", request: "ChatCompletionRequest", input_kwargs: Dict[str, Any]
-) -> AsyncGenerator[str, None]:
-    yield create_stream_chunk(
-        input_kwargs["request_id"], request.model, ChatCompletionMessage(role=Role.ASSISTANT, content="")
-    )
-    async for new_token in chat_model.stream_chat(**input_kwargs):
-        yield create_stream_chunk(input_kwargs["request_id"], request.model, ChatCompletionMessage(content=new_token))
-
-    yield create_stream_chunk(
-        input_kwargs["request_id"], request.model, ChatCompletionMessage(), finish_reason=Finish.STOP
-    )
-    yield "[DONE]"
-
-
 def launch_server(config: "ChatConfig") -> None:
     model = ChatModel(config)
     app = FastAPI()
 
     @app.post("/v1/chat/completions", response_model=ChatCompletionResponse, status_code=status.HTTP_200_OK)
-    async def create_chat_completion_v1(request: "ChatCompletionRequest"):
-        return await create_chat_completion(model, request)
+    async def create_chat_completion(request: "ChatCompletionRequest"):
+        return await _create_local_chat_completion(request, model)
 
-    uvicorn.run(app, host="127.0.0.1", port=config.port, workers=1)
+    uvicorn.run(app, port=config.port)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 from dataclasses import dataclass, fields
-from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, Generator, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, AsyncGenerator, AsyncIterator, Dict, List, Optional, Tuple, Union
 
 from transformers import AutoTokenizer, GenerationConfig
 from typing_extensions import Self
@@ -17,6 +17,14 @@ if TYPE_CHECKING:
 
 @dataclass
 class ChatConfig:
+    r"""
+    Creates configuration for a chat model.
+
+    Methods:
+        add_cli_args: adds arguments to a argument parser.
+        from_cli_args: builds configuration based on the command line arguments.
+    """
+
     name: str
     path: str
     device: List[int]
@@ -44,6 +52,15 @@ class ChatConfig:
 
 
 class ChatModel:
+    r"""
+    Creates a chat model for chat completions.
+
+    Methods:
+        chat: generates chat completions.
+        stream_chat: streams chat completions.
+        function_call: generates tool calls.
+    """
+
     def __init__(self, config: "ChatConfig") -> None:
         config.path = try_download_model_from_ms(config.path)
         self.config = config
@@ -89,7 +106,7 @@ class ChatModel:
             self._generation_config.top_p = 1.0
 
         if not self._generation_config.max_new_tokens:
-            self._generation_config.max_new_tokens = 1024
+            self._generation_config.max_new_tokens = 2048
 
         if isinstance(self._generation_config.eos_token_id, int):
             self._generation_config.eos_token_id = [self._generation_config.eos_token_id]
@@ -121,6 +138,22 @@ class ChatModel:
         return result_generator
 
     async def chat(self, messages: List[Dict[str, str]], request_id: str, **gen_kwargs) -> Tuple[str, int, int]:
+        r"""
+        Generates chat completions.
+
+        Args:
+            messages: input messages.
+            request_id: request ID.
+            temperature: generation parameter.
+            top_p: generation parameter.
+            max_tokens: generation parameter.
+            stop_token_ids: generation parameter.
+
+        Returns:
+            generated_text: the generated text.
+            prompt_tokens: the number of prompt tokens.
+            completion_tokens: the number of completion tokens.
+        """
         generated_text, prompt_tokens, completion_tokens = "", 0, 0
         generator = await self._generate(messages, request_id, **gen_kwargs)
         async for result in generator:
@@ -133,7 +166,21 @@ class ChatModel:
 
     async def stream_chat(
         self, messages: List[Dict[str, str]], request_id: str, **gen_kwargs
-    ) -> Generator[str, None, None]:
+    ) -> AsyncGenerator[str, None]:
+        r"""
+        Streams chat completions.
+
+        Args:
+            messages: input messages.
+            request_id: request ID.
+            temperature: generation parameter.
+            top_p: generation parameter.
+            max_tokens: generation parameter.
+            stop_token_ids: generation parameter.
+
+        Returns:
+            generated_token: the generated token.
+        """
         generated_text = ""
         generator = await self._generate(messages, request_id, **gen_kwargs)
         async for result in generator:
@@ -144,21 +191,33 @@ class ChatModel:
     async def function_call(
         self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]], request_id: str, **gen_kwargs
     ) -> Tuple[Union[str, Tuple[str, str]], int, int]:
-        generated_text, prompt_tokens, completion_tokens = "", 0, 0
+        r"""
+        Generates chat completions.
+
+        Args:
+            messages: input messages.
+            tools: tools available.
+            request_id: request ID.
+            temperature: generation parameter.
+            top_p: generation parameter.
+            max_tokens: generation parameter.
+            stop_token_ids: generation parameter.
+
+        Returns:
+            response | (name, arguments): response text or tool name with JSON arguments if tool exists.
+            prompt_tokens: the number of prompt tokens.
+            completion_tokens: the number of completion tokens.
+        """
         agent_messages = self._agent.build_prompt(messages, tools)
         stop_word = self._agent.get_stop_word()
         if stop_word is not None:
-            gen_kwargs["stop_token_ids"] = [self._tokenizer.encode(stop_word)[0]]
+            stop_word_id = self._tokenizer.convert_tokens_to_ids(self._tokenizer.tokenize(stop_word)[0])
+            gen_kwargs["stop_token_ids"] = gen_kwargs.pop("stop_token_ids", []) + [stop_word_id]
 
-        generator = await self._generate(agent_messages, request_id, **gen_kwargs)
-        async for result in generator:
-            if result.finished:
-                generated_text = result.outputs[0].text
-                prompt_tokens = len(result.prompt_token_ids)
-                completion_tokens = len(result.outputs[0].token_ids)
+        generated_text, prompt_tokens, completion_tokens = await self.chat(agent_messages, request_id, **gen_kwargs)
 
         if stop_word is not None:
-            stop_token = self._tokenizer.decode(gen_kwargs["stop_token_ids"])
+            stop_token = self._tokenizer.convert_ids_to_tokens(stop_word_id)
             if generated_text.endswith(stop_token):
                 generated_text = generated_text[: -len(stop_token)]
 
