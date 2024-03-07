@@ -1,4 +1,4 @@
 infinity-emb[torch]==0.0.17
 openai>=1.5.0
 sse-starlette
-vllm==0.3.2
+vllm>=0.3.3

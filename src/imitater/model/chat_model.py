@@ -150,14 +150,14 @@ class ChatModel:
             prompt_tokens: the number of prompt tokens.
             completion_tokens: the number of completion tokens.
         """
-        generated_text, prompt_tokens, completion_tokens = "", 0, 0
+        final_result = None
         generator = await self._generate(messages, request_id, **gen_kwargs)
         async for result in generator:
-            if not result.finished:
-                generated_text = result.outputs[0].text
-                prompt_tokens = len(result.prompt_token_ids)
-                completion_tokens = len(result.outputs[0].token_ids)
+            final_result = result
 
+        generated_text = final_result.outputs[0].text
+        prompt_tokens = len(final_result.prompt_token_ids)
+        completion_tokens = len(final_result.outputs[0].token_ids)
         return generated_text, prompt_tokens, completion_tokens
 
     async def stream_chat(
@@ -180,10 +180,9 @@ class ChatModel:
         generated_text = ""
         generator = await self._generate(messages, request_id, **gen_kwargs)
         async for result in generator:
-            if not result.finished:
-                delta_text = result.outputs[0].text[len(generated_text) :]
-                generated_text = result.outputs[0].text
-                yield delta_text
+            delta_text = result.outputs[0].text[len(generated_text) :]
+            generated_text = result.outputs[0].text
+            yield delta_text
 
     async def function_call(
         self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]], request_id: str, **gen_kwargs
