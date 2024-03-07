@@ -6,8 +6,6 @@ from typing_extensions import Self
 
 from imitater.agent import get_agent, list_agents
 
-
-
 if TYPE_CHECKING:
     from argparse import ArgumentParser, Namespace
 
@@ -35,6 +33,25 @@ class StopOnTokens(StoppingCriteria):
             if input_ids[0][-1] == stop_id:
                 return True
         return False
+
+
+class ObservationStoppingCriteria(StoppingCriteria):
+    def __init__(self, observation_token_ids):
+        self.observation_token_ids = observation_token_ids
+
+    def __call__(
+            self, input_ids: torch.LongTensor, scores: torch.FloatTensor, **kwargs
+    ) -> bool:
+        cur_len = input_ids.shape[-1]
+        if cur_len < len(self.observation_token_ids[0]):
+            return False
+
+        last_n_tokens = input_ids[0][-len(self.observation_token_ids[0]):]
+
+        if torch.equal(last_n_tokens, self.observation_token_ids):
+            return True
+        else:
+            return False
 
 
 class OVCHATGLMModel(OVModelForCausalLM):
@@ -186,7 +203,8 @@ class VinoChatModel:
         )
 
     def _load_tokenizer(self) -> None:
-        self._tokenizer = AutoTokenizer.from_pretrained(self.config.path, trust_remote_code=True)
+        self._tokenizer = AutoTokenizer.from_pretrained(self.config.path,
+                                                        trust_remote_code=True)
         if self.config.template:
             with open(self.config.template, "r", encoding="utf-8") as f:
                 self._tokenizer.chat_template = f.read()
@@ -222,6 +240,8 @@ class VinoChatModel:
             if eos_token_id != self._tokenizer.eos_token_id:
                 extra_special_tokens.append(self._tokenizer.convert_ids_to_tokens(eos_token_id))
 
+        for v in self._tokenizer.tokenizer.special_tokens.keys():
+            extra_special_tokens.append(v)
         self._tokenizer.add_special_tokens(
             {"additional_special_tokens": extra_special_tokens}, replace_additional_special_tokens=False
         )
@@ -235,12 +255,15 @@ class VinoChatModel:
             self._tokenizer, timeout=30.0, skip_prompt=True, skip_special_tokens=True
         )
         stop_tokens = self._generation_config.eos_token_id + gen_kwargs.pop("stop_token_ids", [])
+
+        observation_token_ids = [64797]
+        stop_tokens = stop_tokens+ observation_token_ids
         stop_tokens = [StopOnTokens(stop_tokens)]
 
         generate_kwargs = dict(
             input_ids=input_ids,
             max_new_tokens=self._generation_config.max_new_tokens,
-            temperature=0.1,
+            temperature=0.79,
             do_sample=True,
             top_p=1.0,
             top_k=50,
@@ -249,9 +272,8 @@ class VinoChatModel:
             stopping_criteria=StoppingCriteriaList(stop_tokens)
         )
 
-        t1 = Thread(target= self._engine.generate, kwargs=generate_kwargs)
+        t1 = Thread(target=self._engine.generate, kwargs=generate_kwargs)
         t1.start()
-
 
         return streamer
 
@@ -341,4 +363,3 @@ class VinoChatModel:
                 generated_text = generated_text[: -len(stop_token)]
 
         return self._agent.extract_tool(generated_text, tools), prompt_tokens, completion_tokens
-
