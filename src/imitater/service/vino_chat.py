@@ -20,7 +20,7 @@ from imitater.service.protocol import (
     UsageInfo,
 )
 
-from imitater.model.vino_model import VinoChatConfig, VinoChatModel
+from imitater.model import (VinoChatConfig, VinoChatModel)
 
 
 async def _create_stream_chat_completion(
