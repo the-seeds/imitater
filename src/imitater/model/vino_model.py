@@ -20,6 +20,16 @@ from typing import Optional, Union, Dict, List, Tuple
 from pathlib import Path
 from threading import Thread
 import torch
+from transformers.generation.logits_process import LogitsProcessor
+from transformers.generation.utils import LogitsProcessorList
+
+
+class InvalidScoreLogitsProcessor(LogitsProcessor):
+    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor) -> torch.FloatTensor:
+        if torch.isnan(scores).any() or torch.isinf(scores).any():
+            scores.zero_()
+            scores[..., 5] = 5e4
+        return scores
 
 
 class StopOnTokens(StoppingCriteria):
@@ -240,8 +250,10 @@ class VinoChatModel:
             if eos_token_id != self._tokenizer.eos_token_id:
                 extra_special_tokens.append(self._tokenizer.convert_ids_to_tokens(eos_token_id))
 
+        # 将glm3中的role_special_tokens添加进 special_tokens和additional_special_tokens
         for v in self._tokenizer.tokenizer.special_tokens.keys():
             extra_special_tokens.append(v)
+
         self._tokenizer.add_special_tokens(
             {"additional_special_tokens": extra_special_tokens}, replace_additional_special_tokens=False
         )
@@ -254,22 +266,33 @@ class VinoChatModel:
         streamer = TextIteratorStreamer(
             self._tokenizer, timeout=30.0, skip_prompt=True, skip_special_tokens=True
         )
-        stop_tokens = self._generation_config.eos_token_id + gen_kwargs.pop("stop_token_ids", [])
+        # glm3预测样本会添加一些掩码token，这里需要将其去掉
+        logits_processor = LogitsProcessorList()
+        logits_processor.append(InvalidScoreLogitsProcessor())
 
-        observation_token_ids = [64797]
-        stop_tokens = stop_tokens+ observation_token_ids
+        # 将glm3中的role_special_tokens添加 eos标记
+        eos_token_id = [self._tokenizer.eos_token_id, self._tokenizer.get_command("<|user|>"),
+                        self._tokenizer.get_command("<|observation|>")]
+
+        # 将glm3中的role_special_tokens添加进 stopping_criteria
+        stop_tokens = self._generation_config.eos_token_id + gen_kwargs.pop("stop_token_ids", [])
+        observation_token_ids = [self._tokenizer.get_command("<|observation|>")]
+        stop_tokens = stop_tokens + observation_token_ids
         stop_tokens = [StopOnTokens(stop_tokens)]
 
         generate_kwargs = dict(
             input_ids=input_ids,
             max_new_tokens=self._generation_config.max_new_tokens,
-            temperature=0.79,
+            temperature=0.01 if gen_kwargs.get("temperature") is None else gen_kwargs.get("temperature"),
             do_sample=True,
-            top_p=1.0,
-            top_k=50,
-            repetition_penalty=1.1,
+            top_p=1.0 if gen_kwargs.get("top_p") is None else gen_kwargs.get("top_p"),
+            repetition_penalty=1.0,
+            length_penalty=1.0,
+            num_beams=1,
+            logits_processor=logits_processor,
             streamer=streamer,
-            stopping_criteria=StoppingCriteriaList(stop_tokens)
+            stopping_criteria=StoppingCriteriaList(stop_tokens),
+            eos_token_id=eos_token_id
         )
 
         t1 = Thread(target=self._engine.generate, kwargs=generate_kwargs)
