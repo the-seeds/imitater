@@ -10,7 +10,8 @@ A unified language model server built upon [vllm](https://github.com/vllm-projec
 ### Install
 
 ```bash
-pip install -U imitater
+pip install packaging
+pip install -e .
 ```
 
 ### Launch Server

@@ -1,8 +1,13 @@
-from subprocess import Popen
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from ..utils.generic import jsonify
-from .protocol import ChatCompletionMessage, ChatCompletionStreamResponse, ChatCompletionStreamResponseChoice, Finish
+from .protocol import ChatCompletionStreamResponse, ChatCompletionStreamResponseChoice
+
+
+if TYPE_CHECKING:
+    from subprocess import Popen
+
+    from .protocol import ChatCompletionMessage, Finish
 
 
 def print_subprocess_stdout(process: "Popen") -> None:
@@ -20,7 +25,7 @@ def create_stream_chunk(
     model: str,
     delta: "ChatCompletionMessage",
     index: Optional[int] = 0,
-    finish_reason: Optional[Finish] = None,
+    finish_reason: Optional["Finish"] = None,
 ) -> str:
     choice = ChatCompletionStreamResponseChoice(index=index, delta=delta, finish_reason=finish_reason)
     chunk = ChatCompletionStreamResponse(id=request_id, model=model, choices=[choice])

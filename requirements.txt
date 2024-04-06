@@ -1,4 +1,4 @@
-infinity-emb[torch]==0.0.17
+infinity-emb[torch,optimum]>=0.0.31
 openai>=1.5.0
 sse-starlette
-vllm>=0.3.3
+vllm @ git+https://github.com/vllm-project/vllm.git@54951ac4bfb7f4224cb8f5ffc89b214c950107d8

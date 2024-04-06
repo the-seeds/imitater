@@ -206,7 +206,7 @@ def launch_server(config_file: str) -> None:
         return await _create_openai_embeddings(request, embed_models[request.model])
 
     for process in processes:
-        thread = Thread(target=print_subprocess_stdout, args=[process])
+        thread = Thread(target=print_subprocess_stdout, args=[process], daemon=True)
         thread.start()
 
     uvicorn.run(app, host="0.0.0.0", port=port)
