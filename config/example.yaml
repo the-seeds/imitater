@@ -10,12 +10,6 @@ chat:
       - 1
       - 2
     port: 8012
-  - name: qwen1.5-14b-chat
-    path: Qwen/Qwen1.5-14B-Chat-AWQ
-    device:
-      - 3
-    port: 8013
-    maxlen: 16384
 
 embed:
   - name: text-embedding-ada-002
