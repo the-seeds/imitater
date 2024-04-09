@@ -3,12 +3,13 @@ import os
 from copy import deepcopy
 from subprocess import PIPE, STDOUT, Popen
 from threading import Thread
-from typing import Any, AsyncGenerator, Dict, List, Union
+from typing import Any, AsyncGenerator, Dict, List, Union, Optional
 
 import uvicorn
 import yaml
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security.http import HTTPAuthorizationCredentials, HTTPBearer
 from openai import AsyncOpenAI, AsyncStream
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 from sse_starlette import EventSourceResponse
