@@ -160,46 +160,72 @@ def launch_server(config_file: str) -> None:
 
     port = config["service"].get("port", 8000)
     chat_models: Dict[str, "AsyncOpenAI"] = {}
+    api_key = config["service"].get("api_key", "")
     embed_models: Dict[str, "AsyncOpenAI"] = {}
     processes: List["Popen"] = []
-
-    for chat_config in config["chat"]:
-        if "token" in chat_config:
-            chat_models[chat_config["name"]] = AsyncOpenAI(api_key=chat_config["token"])
-        else:
-            processes.append(_launch_chat_server(chat_config))
-            chat_models[chat_config["name"]] = AsyncOpenAI(
-                api_key="0", base_url="http://localhost:{}/v1".format(chat_config["port"])
-            )
-
-    for embed_config in config["embed"]:
-        if "token" in embed_config:
-            embed_models[embed_config["name"]] = AsyncOpenAI(api_key=embed_config["token"])
-        else:
-            processes.append(_launch_embed_server(embed_config))
-            embed_models[embed_config["name"]] = AsyncOpenAI(
-                api_key="0", base_url="http://localhost:{}/v1".format(embed_config["port"])
-            )
+    
+    if "chat" in config:
+        for chat_config in config["chat"]:
+            if "token" in chat_config:
+                chat_models[chat_config["name"]] = AsyncOpenAI(api_key=chat_config["token"])
+            else:
+                processes.append(_launch_chat_server(chat_config))
+                chat_models[chat_config["name"]] = AsyncOpenAI(
+                    api_key="0", base_url="http://localhost:{}/v1".format(chat_config["port"])
+                )
+                
+    if "embed" in config:
+        for embed_config in config["embed"]:
+            if "token" in embed_config:
+                embed_models[embed_config["name"]] = AsyncOpenAI(api_key=embed_config["token"])
+            else:
+                processes.append(_launch_embed_server(embed_config))
+                embed_models[embed_config["name"]] = AsyncOpenAI(
+                    api_key="0", base_url="http://localhost:{}/v1".format(embed_config["port"])
+                )
 
     app = FastAPI()
     app.add_middleware(
         CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"]
     )
+    
+    get_bearer_token = HTTPBearer(auto_error=False)
+    async def check_api_key(
+        auth: Optional[HTTPAuthorizationCredentials] = Depends(get_bearer_token),
+    ) -> str:
+        if api_key:
+            if auth is None or (token := auth.credentials) not in api_key:
+                raise HTTPException(
+                    status_code=401,
+                    detail={
+                        "error": {
+                            "message": "",
+                            "type": "invalid_request_error",
+                            "param": None,
+                            "code": "invalid_api_key",
+                        }
+                    },
+                )
+            return token
+        else:
+            # api_keys not set; allow all
+            return None
 
-    @app.get("/v1/models", response_model=ModelList)
+
+    @app.get("/v1/models", response_model=ModelList, dependencies=[Depends(check_api_key)])
     async def list_models():
         model_names = set()
         model_names.update(chat_models.keys())
         model_names.update(embed_models.keys())
         return ModelList(data=[ModelCard(id=name) for name in model_names])
 
-    @app.post("/v1/chat/completions", response_model=ChatCompletionResponse, status_code=status.HTTP_200_OK)
+    @app.post("/v1/chat/completions", response_model=ChatCompletionResponse, status_code=status.HTTP_200_OK, dependencies=[Depends(check_api_key)])
     async def create_chat_completion(request: "ChatCompletionRequest"):
         if request.model not in chat_models:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Model not found.")
         return await _create_openai_chat_completion(request, chat_models[request.model])
 
-    @app.post("/v1/embeddings", response_model=EmbeddingsResponse, status_code=status.HTTP_200_OK)
+    @app.post("/v1/embeddings", response_model=EmbeddingsResponse, status_code=status.HTTP_200_OK, dependencies=[Depends(check_api_key)])
     async def create_embeddings(request: "EmbeddingsRequest"):
         if request.model not in embed_models:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Model not found.")
