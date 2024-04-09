@@ -3,12 +3,13 @@ import os
 from copy import deepcopy
 from subprocess import PIPE, STDOUT, Popen
 from threading import Thread
-from typing import Any, AsyncGenerator, Dict, List, Union
+from typing import Annotated, Any, AsyncGenerator, Dict, List, Optional, Union
 
 import uvicorn
 import yaml
-from fastapi import FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security.http import HTTPAuthorizationCredentials, HTTPBearer
 from openai import AsyncOpenAI, AsyncStream
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 from sse_starlette import EventSourceResponse
@@ -159,47 +160,66 @@ def launch_server(config_file: str) -> None:
         config: Dict[str, Union[Dict[str, Any], List[Dict[str, Any]]]] = yaml.safe_load(f)
 
     port = config["service"].get("port", 8000)
+    api_key = config["service"].get("api_key", "")
     chat_models: Dict[str, "AsyncOpenAI"] = {}
     embed_models: Dict[str, "AsyncOpenAI"] = {}
     processes: List["Popen"] = []
 
-    for chat_config in config["chat"]:
-        if "token" in chat_config:
-            chat_models[chat_config["name"]] = AsyncOpenAI(api_key=chat_config["token"])
-        else:
-            processes.append(_launch_chat_server(chat_config))
-            chat_models[chat_config["name"]] = AsyncOpenAI(
-                api_key="0", base_url="http://localhost:{}/v1".format(chat_config["port"])
-            )
+    if "chat" in config:
+        for chat_config in config["chat"]:
+            if "token" in chat_config:
+                chat_models[chat_config["name"]] = AsyncOpenAI(api_key=chat_config["token"])
+            else:
+                processes.append(_launch_chat_server(chat_config))
+                chat_models[chat_config["name"]] = AsyncOpenAI(
+                    api_key="0", base_url="http://localhost:{}/v1".format(chat_config["port"])
+                )
 
-    for embed_config in config["embed"]:
-        if "token" in embed_config:
-            embed_models[embed_config["name"]] = AsyncOpenAI(api_key=embed_config["token"])
-        else:
-            processes.append(_launch_embed_server(embed_config))
-            embed_models[embed_config["name"]] = AsyncOpenAI(
-                api_key="0", base_url="http://localhost:{}/v1".format(embed_config["port"])
-            )
+    if "embed" in config:
+        for embed_config in config["embed"]:
+            if "token" in embed_config:
+                embed_models[embed_config["name"]] = AsyncOpenAI(api_key=embed_config["token"])
+            else:
+                processes.append(_launch_embed_server(embed_config))
+                embed_models[embed_config["name"]] = AsyncOpenAI(
+                    api_key="0", base_url="http://localhost:{}/v1".format(embed_config["port"])
+                )
 
     app = FastAPI()
     app.add_middleware(
         CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"]
     )
 
-    @app.get("/v1/models", response_model=ModelList)
+    security = HTTPBearer(auto_error=False)
+
+    async def verify_api_key(auth: Annotated[Optional[HTTPAuthorizationCredentials], Depends(security)]) -> None:
+        if api_key and (auth is None or auth.credentials != api_key):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key.")
+
+    @app.get("/v1/models", response_model=ModelList, dependencies=[Depends(verify_api_key)])
     async def list_models():
         model_names = set()
         model_names.update(chat_models.keys())
         model_names.update(embed_models.keys())
         return ModelList(data=[ModelCard(id=name) for name in model_names])
 
-    @app.post("/v1/chat/completions", response_model=ChatCompletionResponse, status_code=status.HTTP_200_OK)
+    @app.post(
+        "/v1/chat/completions",
+        response_model=ChatCompletionResponse,
+        status_code=status.HTTP_200_OK,
+        dependencies=[Depends(verify_api_key)],
+    )
     async def create_chat_completion(request: "ChatCompletionRequest"):
         if request.model not in chat_models:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Model not found.")
         return await _create_openai_chat_completion(request, chat_models[request.model])
 
-    @app.post("/v1/embeddings", response_model=EmbeddingsResponse, status_code=status.HTTP_200_OK)
+    @app.post(
+        "/v1/embeddings",
+        response_model=EmbeddingsResponse,
+        status_code=status.HTTP_200_OK,
+        dependencies=[Depends(verify_api_key)],
+    )
     async def create_embeddings(request: "EmbeddingsRequest"):
         if request.model not in embed_models:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Model not found.")
