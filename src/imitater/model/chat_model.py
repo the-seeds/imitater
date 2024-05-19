@@ -123,8 +123,8 @@ class ChatModel:
             conversation=messages, tokenize=True, add_generation_prompt=True
         )
         sampling_params = SamplingParams(
-            temperature=gen_kwargs.pop("temperature", self._generation_config.temperature),
-            top_p=gen_kwargs.pop("top_p", self._generation_config.top_p),
+            temperature=gen_kwargs.pop("temperature") or self._generation_config.temperature,
+            top_p=gen_kwargs.pop("top_p") or self._generation_config.top_p,
             max_tokens=gen_kwargs.pop("max_tokens") or self._generation_config.max_new_tokens,
             stop=gen_kwargs.pop("stop", None),
             stop_token_ids=self._generation_config.eos_token_id + gen_kwargs.pop("stop_token_ids", []),
