@@ -54,9 +54,13 @@ def launch_server(config: "EmbedConfig") -> None:
     uvicorn.run(app, port=config.port)
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
     EmbedConfig.add_cli_args(parser)
     args = parser.parse_args()
     config = EmbedConfig.from_cli_args(args)
     launch_server(config)
+
+
+if __name__ == "__main__":
+    main()

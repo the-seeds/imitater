@@ -232,8 +232,12 @@ def launch_server(config_file: str) -> None:
     uvicorn.run(app, host="0.0.0.0", port=port)
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", type=str, required=True, help="Path to config file.")
     args = parser.parse_args()
     launch_server(getattr(args, "config"))
+
+
+if __name__ == "__main__":
+    main()

@@ -10,14 +10,13 @@ A unified language model server built upon [vllm](https://github.com/vllm-projec
 ### Install
 
 ```bash
-pip install packaging
 pip install -e .
 ```
 
 ### Launch Server
 
 ```bash
-python -m imitater.service.app -c config/example.yaml
+imitater -c config/example.yaml
 ```
 
 <details><summary>Show configuration instruction.</summary>

@@ -1,6 +1,7 @@
 import os
 import re
-from setuptools import setup, find_packages
+
+from setuptools import find_packages, setup
 
 
 def get_version():
@@ -34,8 +35,9 @@ def main():
         packages=find_packages("src"),
         python_requires=">=3.9.0",
         install_requires=get_requires(),
+        entry_points={"console_scripts": ["imitater = imitater.service.app:main"]},
         classifiers=[
-            "Development Status :: 3 - Alpha",
+            "Development Status :: 4 - Beta",
             "Intended Audience :: Developers",
             "Intended Audience :: Education",
             "Intended Audience :: Science/Research",

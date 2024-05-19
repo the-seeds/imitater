@@ -123,9 +123,10 @@ class ChatModel:
             conversation=messages, tokenize=True, add_generation_prompt=True
         )
         sampling_params = SamplingParams(
-            temperature=gen_kwargs.pop("temperature", None) or self._generation_config.temperature,
-            top_p=gen_kwargs.pop("top_p", None) or self._generation_config.top_p,
-            max_tokens=gen_kwargs.pop("max_tokens", None) or self._generation_config.max_new_tokens,
+            temperature=gen_kwargs.pop("temperature", self._generation_config.temperature),
+            top_p=gen_kwargs.pop("top_p", self._generation_config.top_p),
+            max_tokens=gen_kwargs.pop("max_tokens", self._generation_config.max_new_tokens),
+            stop=gen_kwargs.pop("stop", None),
             stop_token_ids=self._generation_config.eos_token_id + gen_kwargs.pop("stop_token_ids", []),
         )
         result_generator = self._engine.generate(
@@ -143,6 +144,7 @@ class ChatModel:
             temperature: generation parameter.
             top_p: generation parameter.
             max_tokens: generation parameter.
+            stop: generation parameter.
             stop_token_ids: generation parameter.
 
         Returns:
@@ -172,6 +174,7 @@ class ChatModel:
             temperature: generation parameter.
             top_p: generation parameter.
             max_tokens: generation parameter.
+            stop: generation parameter.
             stop_token_ids: generation parameter.
 
         Returns:
@@ -197,6 +200,7 @@ class ChatModel:
             temperature: generation parameter.
             top_p: generation parameter.
             max_tokens: generation parameter.
+            stop: generation parameter.
             stop_token_ids: generation parameter.
 
         Returns:

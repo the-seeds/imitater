@@ -47,7 +47,11 @@ async def _create_local_chat_completion(
         "temperature": request.temperature,
         "top_p": request.top_p,
         "max_tokens": request.max_tokens,
+        "stop": request.stop,
     }
+
+    if request.n != 1:
+        raise NotImplementedError("Multiple responses are not supported yet.")
 
     if request.stream:
         if request.tools is not None:
@@ -99,9 +103,13 @@ def launch_server(config: "ChatConfig") -> None:
     uvicorn.run(app, port=config.port)
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
     ChatConfig.add_cli_args(parser)
     args = parser.parse_args()
     config = ChatConfig.from_cli_args(args)
     launch_server(config)
+
+
+if __name__ == "__main__":
+    main()

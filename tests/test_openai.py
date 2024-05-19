@@ -79,7 +79,7 @@ def test_tool(client: "OpenAI") -> None:
     print(result.choices[0].message)
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", type=str, required=True, help="Path to config file.")
     args = parser.parse_args()
@@ -87,7 +87,7 @@ if __name__ == "__main__":
         config: Dict[str, Dict[str, Any]] = yaml.safe_load(f)
 
     client = OpenAI(
-        api_key="0",
+        api_key=config["service"].get("api_key", "0"),
         base_url="http://{host}:{port}/v1".format(
             host=config["service"].get("host", "localhost"),
             port=config["service"].get("port", 8000),
@@ -106,3 +106,7 @@ if __name__ == "__main__":
                 test_chat(client, query)
             elif action == Action.EMBED:
                 test_embed(client, query)
+
+
+if __name__ == "__main__":
+    main()
