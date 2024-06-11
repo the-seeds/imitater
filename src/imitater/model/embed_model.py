@@ -32,11 +32,11 @@ class EmbedConfig:
 
     @staticmethod
     def add_cli_args(parser: "ArgumentParser") -> None:
-        parser.add_argument("--name", type=str, required=True)
-        parser.add_argument("--path", type=str, required=True)
-        parser.add_argument("--device", type=int, nargs="+", required=True)
-        parser.add_argument("--port", type=int, required=True)
-        parser.add_argument("--batch_size", type=int, default=64)
+        parser.add_argument("--name", type=str, required=True, help="Model name.")
+        parser.add_argument("--path", type=str, required=True, help="Model path or hub id.")
+        parser.add_argument("--device", type=int, nargs="+", required=True, help="Device ids.")
+        parser.add_argument("--port", type=int, required=True, help="API port.")
+        parser.add_argument("--batch_size", type=int, default=64, help="Batch size.")
 
     @classmethod
     def from_cli_args(cls, args: "Namespace") -> Self:

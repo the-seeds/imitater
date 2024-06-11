@@ -34,14 +34,14 @@ class ChatConfig:
 
     @staticmethod
     def add_cli_args(parser: "ArgumentParser") -> None:
-        parser.add_argument("--name", type=str)
-        parser.add_argument("--path", type=str)
-        parser.add_argument("--device", type=int, nargs="+")
-        parser.add_argument("--port", type=int)
-        parser.add_argument("--maxlen", type=int, default=2048)
-        parser.add_argument("--agent_type", type=str, choices=list_agents(), default="react")
-        parser.add_argument("--template", type=str, default=None)
-        parser.add_argument("--gen_config", type=str, default=None)
+        parser.add_argument("--name", type=str, required=True, help="Model name.")
+        parser.add_argument("--path", type=str, required=True, help="Model path or hub id.")
+        parser.add_argument("--device", type=int, nargs="+", required=True, help="Device ids.")
+        parser.add_argument("--port", type=int, required=True, help="API port.")
+        parser.add_argument("--maxlen", type=int, default=2048, help="Max sequence length.")
+        parser.add_argument("--agent_type", type=str, choices=list_agents(), default="react", help="Agent type.")
+        parser.add_argument("--template", type=str, default=None, help="Template path.")
+        parser.add_argument("--gen_config", type=str, default=None, help="Generation config path.")
 
     @classmethod
     def from_cli_args(cls, args: "Namespace") -> Self:
@@ -130,7 +130,7 @@ class ChatModel:
             stop_token_ids=self._generation_config.eos_token_id + gen_kwargs.pop("stop_token_ids", []),
         )
         result_generator = self._engine.generate(
-            prompt=None, sampling_params=sampling_params, request_id=request_id, prompt_token_ids=input_ids
+            inputs={"prompt_token_ids": input_ids}, sampling_params=sampling_params, request_id=request_id
         )
         return result_generator
 

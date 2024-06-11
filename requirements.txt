@@ -1,4 +1,7 @@
-vllm>=0.4.2
-infinity-emb[torch,optimum]>=0.0.33
+vllm==0.4.3
+infinity-emb[torch,optimum]==0.0.40
 openai>=1.5.0
+uvicorn
+pydantic
+fastapi
 sse-starlette
