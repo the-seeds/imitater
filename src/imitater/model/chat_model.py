@@ -74,6 +74,7 @@ class ChatModel:
             trust_remote_code=True,
             max_model_len=self.config.maxlen,
             tensor_parallel_size=len(self.config.device),
+            dtype="float16",
         )
         self._engine = AsyncLLMEngine.from_engine_args(engine_args)
 
